@@ -99,7 +99,9 @@ export async function getPosts(params: {
 
   const result = await pool.query(
     `SELECT
-      p.id, p.short_code, a.username, a.account_type, a.followers_count,
+      p.id, p.short_code, COALESCE(a.username, 'desconocido') as username,
+      COALESCE(a.account_type, 'competitor') as account_type,
+      COALESCE(a.followers_count, 0) as followers_count,
       p.type, p.caption, p.likes_count, p.comments_count, p.shares_count,
       p.video_view_count, p.video_play_count, p.video_duration,
       p.engagement_rate, p.performance_score, p.posted_at, p.url,
@@ -109,7 +111,7 @@ export async function getPosts(params: {
         ARRAY[]::TEXT[]
       ) as hashtags
     FROM posts p
-    JOIN accounts a ON a.id = p.account_id
+    LEFT JOIN accounts a ON a.id = p.account_id
     ${where}
     ORDER BY ${orderCol} ${dir} NULLS LAST
     LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,

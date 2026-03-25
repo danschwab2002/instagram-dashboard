@@ -14,7 +14,7 @@ export default async function Home({
   const sortBy = params.sort || "performance_score";
   const sortDir = params.dir || "DESC";
   const page = parseInt(params.page || "1");
-  const limit = 50;
+  const limit = 100;
   const offset = (page - 1) * limit;
 
   const [accounts, { posts, total }, stats] = await Promise.all([
