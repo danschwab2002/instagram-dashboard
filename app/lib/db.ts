@@ -33,6 +33,7 @@ export interface Post {
   posted_at: string;
   url: string | null;
   display_url: string | null;
+  stored_url: string | null;
   product_type: string | null;
   hashtags: string[];
 }
@@ -105,7 +106,7 @@ export async function getPosts(params: {
       p.type, p.caption, p.likes_count, p.comments_count, p.shares_count,
       p.video_view_count, p.video_play_count, p.video_duration,
       p.engagement_rate, p.performance_score, p.posted_at, p.url,
-      p.display_url, p.product_type,
+      p.display_url, p.stored_url, p.product_type,
       COALESCE(
         (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
         ARRAY[]::TEXT[]

@@ -2,7 +2,7 @@
 
 import { Account, Post } from "../lib/db";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 function formatNumber(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -93,6 +93,7 @@ export function Dashboard({
 }: DashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   const updateParam = useCallback(
     (key: string, value: string | undefined) => {
@@ -242,11 +243,14 @@ export function Dashboard({
                     <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs">{rank}</td>
                     <td className="px-3 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-[var(--text-primary)] truncate max-w-md leading-tight">
+                        <button
+                          onClick={() => setSelectedPost(post)}
+                          className="text-[var(--text-primary)] truncate max-w-md leading-tight text-left hover:text-indigo-400 transition-colors cursor-pointer block"
+                        >
                           {post.caption
                             ? post.caption.split("\n")[0].substring(0, 80)
                             : "Sin caption"}
-                        </p>
+                        </button>
                         {post.hashtags.length > 0 && (
                           <p className="text-[10px] text-[var(--text-muted)] mt-0.5 truncate max-w-md">
                             {post.hashtags.slice(0, 5).map((h) => `#${h}`).join(" ")}
@@ -317,6 +321,95 @@ export function Dashboard({
           </div>
         )}
       </main>
+
+      {/* Video Modal */}
+      {selectedPost && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedPost(null)}
+        >
+          <div
+            className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+              <div>
+                <p className="text-sm text-[var(--text-secondary)]">@{selectedPost.username}</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {selectedPost.type} &middot; {formatDuration(selectedPost.video_duration)}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedPost(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Video */}
+            {selectedPost.stored_url ? (
+              <div className="bg-black">
+                <video
+                  src={selectedPost.stored_url}
+                  controls
+                  autoPlay
+                  className="w-full max-h-[60vh] object-contain"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-48 bg-[var(--bg-tertiary)] text-[var(--text-muted)] text-sm">
+                Video no disponible en storage
+              </div>
+            )}
+
+            {/* Metrics */}
+            <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
+              <div>
+                <p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p>
+                <p className="text-sm font-semibold">{formatNumber(selectedPost.video_view_count)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-[var(--text-muted)]">Likes</p>
+                <p className="text-sm font-semibold">{formatNumber(selectedPost.likes_count)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-[var(--text-muted)]">Comments</p>
+                <p className="text-sm font-semibold">{formatNumber(selectedPost.comments_count)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-[var(--text-muted)]">Shares</p>
+                <p className="text-sm font-semibold">{formatNumber(selectedPost.shares_count)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-[var(--text-muted)]">Eng. Rate</p>
+                <p className={`text-sm font-semibold ${engagementColor(selectedPost.engagement_rate)}`}>
+                  {formatPercent(selectedPost.engagement_rate)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-[var(--text-muted)]">Score</p>
+                <p className={`text-sm font-semibold ${scoreColor(selectedPost.performance_score)}`}>
+                  {selectedPost.performance_score != null
+                    ? (selectedPost.performance_score * 100).toFixed(1)
+                    : "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* Caption */}
+            {selectedPost.caption && (
+              <div className="p-4">
+                <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Caption</p>
+                <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+                  {selectedPost.caption}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
