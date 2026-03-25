@@ -241,26 +241,17 @@ export function Dashboard({
                   >
                     <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs">{rank}</td>
                     <td className="px-3 py-2.5">
-                      <div className="flex items-start gap-2">
-                        {post.display_url && (
-                          <img
-                            src={post.display_url}
-                            alt=""
-                            className="w-10 h-10 rounded object-cover shrink-0 bg-zinc-800"
-                          />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-[var(--text-primary)] truncate max-w-md leading-tight">
-                            {post.caption
-                              ? post.caption.split("\n")[0].substring(0, 80)
-                              : "Sin caption"}
+                      <div className="min-w-0">
+                        <p className="text-[var(--text-primary)] truncate max-w-md leading-tight">
+                          {post.caption
+                            ? post.caption.split("\n")[0].substring(0, 80)
+                            : "Sin caption"}
+                        </p>
+                        {post.hashtags.length > 0 && (
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5 truncate max-w-md">
+                            {post.hashtags.slice(0, 5).map((h) => `#${h}`).join(" ")}
                           </p>
-                          {post.hashtags.length > 0 && (
-                            <p className="text-[10px] text-[var(--text-muted)] mt-0.5 truncate max-w-md">
-                              {post.hashtags.slice(0, 5).map((h) => `#${h}`).join(" ")}
-                            </p>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">
