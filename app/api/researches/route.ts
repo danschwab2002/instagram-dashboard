@@ -50,11 +50,14 @@ export async function POST(request: NextRequest) {
 
     // 2. Insertar cuentas (upsert por username) y linkear a la investigación
     for (const username of usernames) {
-      // Upsert: si la cuenta ya existe, no la duplica
+      // Upsert: si la cuenta ya existe, resetear flags para que se re-scrapee
       const accountResult = await client.query(
         `INSERT INTO accounts (username, account_type)
          VALUES ($1, 'competitor')
-         ON CONFLICT (username) DO UPDATE SET updated_at = NOW()
+         ON CONFLICT (username) DO UPDATE SET
+           updated_at = NOW(),
+           scraped = FALSE,
+           posts_scraped = FALSE
          RETURNING id`,
         [username]
       );

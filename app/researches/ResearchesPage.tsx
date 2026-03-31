@@ -226,7 +226,7 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
                 return (
                   <Link
                     key={r.id}
-                    href={`/?research=${r.id}`}
+                    href={`/researches/${r.id}`}
                     className="flex items-center justify-between p-4 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] hover:border-indigo-500/30 transition-colors"
                   >
                     <div>
