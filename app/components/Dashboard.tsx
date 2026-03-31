@@ -1,6 +1,7 @@
 "use client";
 
-import { Account, Post } from "../lib/db";
+import { Account, Post, Research } from "../lib/db";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
@@ -76,10 +77,12 @@ interface DashboardProps {
   pageSize: number;
   filters: {
     accountId?: number;
+    researchId?: number;
     type: string;
     sortBy: string;
     sortDir: string;
   };
+  researches: Research[];
 }
 
 export function Dashboard({
@@ -90,6 +93,7 @@ export function Dashboard({
   currentPage,
   pageSize,
   filters,
+  researches,
 }: DashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -141,6 +145,55 @@ export function Dashboard({
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Content Dashboard</p>
         </div>
+
+        {/* Navigation */}
+        <nav className="p-3 border-b border-[var(--border)] flex flex-col gap-1">
+          <Link
+            href="/"
+            className="px-2 py-1.5 rounded text-sm bg-indigo-500/15 text-indigo-400 transition-colors"
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/researches"
+            className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+          >
+            Investigaciones
+          </Link>
+        </nav>
+
+        {/* Research filter */}
+        {researches.length > 0 && (
+          <div className="p-3 border-b border-[var(--border)]">
+            <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2 font-semibold">
+              Investigación
+            </p>
+            <button
+              onClick={() => updateParam("research", undefined)}
+              className={`block w-full text-left px-2 py-1.5 rounded text-sm transition-colors mb-1 ${
+                !filters.researchId
+                  ? "bg-indigo-500/15 text-indigo-400"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              Todas
+            </button>
+            {researches.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => updateParam("research", String(r.id))}
+                className={`block w-full text-left px-2 py-1.5 rounded text-sm transition-colors truncate ${
+                  filters.researchId === r.id
+                    ? "bg-indigo-500/15 text-indigo-400"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                }`}
+                title={`${r.name} — ${r.accounts_count} cuentas`}
+              >
+                {r.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="p-3 border-b border-[var(--border)]">

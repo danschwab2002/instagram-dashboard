@@ -1,0 +1,112 @@
+import { NextRequest, NextResponse } from "next/server";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 5,
+});
+
+// GET /api/researches — lista todas las investigaciones con conteo de cuentas
+export async function GET() {
+  const result = await pool.query(`
+    SELECT
+      r.id, r.name, r.description, r.status, r.created_at,
+      COUNT(ra.account_id)::int as accounts_count
+    FROM researches r
+    LEFT JOIN research_accounts ra ON ra.research_id = r.id
+    GROUP BY r.id
+    ORDER BY r.created_at DESC
+  `);
+
+  return NextResponse.json(result.rows);
+}
+
+// POST /api/researches — crea una investigación con sus cuentas
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { name, description, usernames } = body as {
+    name: string;
+    description?: string;
+    usernames: string[];
+  };
+
+  if (!name || !usernames?.length) {
+    return NextResponse.json(
+      { error: "name y usernames son requeridos" },
+      { status: 400 }
+    );
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Crear la investigación
+    const researchResult = await client.query(
+      `INSERT INTO researches (name, description, status) VALUES ($1, $2, 'draft') RETURNING id`,
+      [name, description || null]
+    );
+    const researchId = researchResult.rows[0].id;
+
+    // 2. Insertar cuentas (upsert por username) y linkear a la investigación
+    for (const username of usernames) {
+      // Upsert: si la cuenta ya existe, no la duplica
+      const accountResult = await client.query(
+        `INSERT INTO accounts (username, account_type)
+         VALUES ($1, 'competitor')
+         ON CONFLICT (username) DO UPDATE SET updated_at = NOW()
+         RETURNING id`,
+        [username]
+      );
+      const accountId = accountResult.rows[0].id;
+
+      // Linkear cuenta a investigación
+      await client.query(
+        `INSERT INTO research_accounts (research_id, account_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [researchId, accountId]
+      );
+    }
+
+    // 3. Disparar webhook de n8n (si está configurado)
+    const webhookUrl = process.env.N8N_RESEARCH_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            research_id: researchId,
+            name,
+            usernames,
+          }),
+        });
+        // Actualizar estado a scraping
+        await client.query(
+          `UPDATE researches SET status = 'scraping' WHERE id = $1`,
+          [researchId]
+        );
+      } catch {
+        // Si el webhook falla, la investigación queda en draft
+        console.error("Failed to trigger n8n webhook");
+      }
+    }
+
+    await client.query("COMMIT");
+
+    return NextResponse.json(
+      { id: researchId, name, accounts_count: usernames.length },
+      { status: 201 }
+    );
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error creating research:", error);
+    return NextResponse.json(
+      { error: "Error creando la investigación" },
+      { status: 500 }
+    );
+  } finally {
+    client.release();
+  }
+}

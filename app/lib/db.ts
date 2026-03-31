@@ -38,7 +38,34 @@ export interface Post {
   hashtags: string[];
 }
 
-export async function getAccounts(): Promise<Account[]> {
+export interface Research {
+  id: number;
+  name: string;
+  accounts_count: number;
+}
+
+export async function getResearches(): Promise<Research[]> {
+  const result = await pool.query(`
+    SELECT r.id, r.name, COUNT(ra.account_id)::int as accounts_count
+    FROM researches r
+    LEFT JOIN research_accounts ra ON ra.research_id = r.id
+    GROUP BY r.id
+    ORDER BY r.created_at DESC
+  `);
+  return result.rows;
+}
+
+export async function getAccounts(researchId?: number): Promise<Account[]> {
+  if (researchId) {
+    const result = await pool.query(`
+      SELECT a.id, a.username, a.full_name, a.followers_count, a.profile_pic_url, a.account_type
+      FROM accounts a
+      JOIN research_accounts ra ON ra.account_id = a.id
+      WHERE ra.research_id = $1
+      ORDER BY a.followers_count DESC
+    `, [researchId]);
+    return result.rows;
+  }
   const result = await pool.query(`
     SELECT id, username, full_name, followers_count, profile_pic_url, account_type
     FROM accounts
@@ -49,6 +76,7 @@ export async function getAccounts(): Promise<Account[]> {
 
 export async function getPosts(params: {
   accountId?: number;
+  researchId?: number;
   type?: string;
   sortBy?: string;
   sortDir?: string;
@@ -57,6 +85,7 @@ export async function getPosts(params: {
 }): Promise<{ posts: Post[]; total: number }> {
   const {
     accountId,
+    researchId,
     type,
     sortBy = "performance_score",
     sortDir = "DESC",
@@ -80,7 +109,13 @@ export async function getPosts(params: {
   const conditions: string[] = [];
   const values: (string | number)[] = [];
   let paramIdx = 1;
+  let joinClause = "";
 
+  if (researchId) {
+    joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
+    conditions.push(`ra.research_id = $${paramIdx++}`);
+    values.push(researchId);
+  }
   if (accountId) {
     conditions.push(`p.account_id = $${paramIdx++}`);
     values.push(accountId);
@@ -93,7 +128,7 @@ export async function getPosts(params: {
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const countResult = await pool.query(
-    `SELECT COUNT(*) FROM posts p ${where}`,
+    `SELECT COUNT(*) FROM posts p ${joinClause} ${where}`,
     values
   );
   const total = parseInt(countResult.rows[0].count, 10);
@@ -113,6 +148,7 @@ export async function getPosts(params: {
       ) as hashtags
     FROM posts p
     LEFT JOIN accounts a ON a.id = p.account_id
+    ${joinClause}
     ${where}
     ORDER BY ${orderCol} ${dir} NULLS LAST
     LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -122,15 +158,29 @@ export async function getPosts(params: {
   return { posts: result.rows, total };
 }
 
-export async function getStats(accountId?: number): Promise<{
+export async function getStats(accountId?: number, researchId?: number): Promise<{
   totalPosts: number;
   totalVideos: number;
   avgEngagement: number;
   avgViews: number;
   totalAccounts: number;
 }> {
-  const where = accountId ? `WHERE p.account_id = $1` : "";
-  const values = accountId ? [accountId] : [];
+  const conditions: string[] = [];
+  const values: number[] = [];
+  let joinClause = "";
+  let paramIdx = 1;
+
+  if (researchId) {
+    joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
+    conditions.push(`ra.research_id = $${paramIdx++}`);
+    values.push(researchId);
+  }
+  if (accountId) {
+    conditions.push(`p.account_id = $${paramIdx++}`);
+    values.push(accountId);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const result = await pool.query(
     `SELECT
@@ -138,17 +188,27 @@ export async function getStats(accountId?: number): Promise<{
       COUNT(*) FILTER (WHERE p.type = 'Video')::int as total_videos,
       ROUND(AVG(p.engagement_rate)::numeric, 4) as avg_engagement,
       ROUND(AVG(p.video_view_count) FILTER (WHERE p.video_view_count IS NOT NULL))::int as avg_views
-    FROM posts p ${where}`,
+    FROM posts p ${joinClause} ${where}`,
     values
   );
 
-  const accountsResult = await pool.query(`SELECT COUNT(*)::int as total FROM accounts`);
+  let accountsTotal: number;
+  if (researchId) {
+    const accountsResult = await pool.query(
+      `SELECT COUNT(*)::int as total FROM research_accounts WHERE research_id = $1`,
+      [researchId]
+    );
+    accountsTotal = accountsResult.rows[0].total || 0;
+  } else {
+    const accountsResult = await pool.query(`SELECT COUNT(*)::int as total FROM accounts`);
+    accountsTotal = accountsResult.rows[0].total || 0;
+  }
 
   return {
     totalPosts: result.rows[0].total_posts || 0,
     totalVideos: result.rows[0].total_videos || 0,
     avgEngagement: parseFloat(result.rows[0].avg_engagement) || 0,
     avgViews: result.rows[0].avg_views || 0,
-    totalAccounts: accountsResult.rows[0].total || 0,
+    totalAccounts: accountsTotal,
   };
 }
