@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { requireUser } from "../lib/auth";
 import { ResearchesPage } from "./ResearchesPage";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ const pool = new Pool({
 });
 
 export default async function Page() {
+  const user = await requireUser();
+
   const result = await pool.query(`
     SELECT
       r.id, r.name, r.description, r.status, r.created_at,
@@ -25,9 +28,10 @@ export default async function Page() {
       ) as posts_count
     FROM researches r
     LEFT JOIN research_accounts ra ON ra.research_id = r.id
+    WHERE r.user_id = $1
     GROUP BY r.id
     ORDER BY r.created_at DESC
-  `);
+  `, [user.id]);
 
   return <ResearchesPage researches={result.rows} />;
 }

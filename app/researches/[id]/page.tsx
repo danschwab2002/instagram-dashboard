@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { notFound } from "next/navigation";
+import { requireUser } from "../../lib/auth";
 import { ResearchDetail } from "./ResearchDetail";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +18,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requireUser();
   const { id } = await params;
   const researchId = parseInt(id);
 
-  // Research info
+  // Research info — solo si pertenece al usuario
   const researchResult = await pool.query(
-    `SELECT id, name, description, status, created_at FROM researches WHERE id = $1`,
-    [researchId]
+    `SELECT id, name, description, status, created_at FROM researches WHERE id = $1 AND user_id = $2`,
+    [researchId, user.id]
   );
   if (researchResult.rows.length === 0) notFound();
   const research = researchResult.rows[0];

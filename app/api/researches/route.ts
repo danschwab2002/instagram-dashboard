@@ -1,28 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
+import { createClient } from "../../lib/supabase/server";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 5,
 });
 
-// GET /api/researches — lista todas las investigaciones con conteo de cuentas
+async function getUser() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+// GET /api/researches — lista investigaciones del usuario
 export async function GET() {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
   const result = await pool.query(`
     SELECT
       r.id, r.name, r.description, r.status, r.created_at,
       COUNT(ra.account_id)::int as accounts_count
     FROM researches r
     LEFT JOIN research_accounts ra ON ra.research_id = r.id
+    WHERE r.user_id = $1
     GROUP BY r.id
     ORDER BY r.created_at DESC
-  `);
+  `, [user.id]);
 
   return NextResponse.json(result.rows);
 }
 
 // POST /api/researches — crea una investigación con sus cuentas
 export async function POST(request: NextRequest) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
   const body = await request.json();
   const { name, description, usernames } = body as {
     name: string;
@@ -41,10 +55,10 @@ export async function POST(request: NextRequest) {
   try {
     await client.query("BEGIN");
 
-    // 1. Crear la investigación
+    // 1. Crear la investigación con user_id
     const researchResult = await client.query(
-      `INSERT INTO researches (name, description, status) VALUES ($1, $2, 'draft') RETURNING id`,
-      [name, description || null]
+      `INSERT INTO researches (name, description, status, user_id) VALUES ($1, $2, 'draft', $3) RETURNING id`,
+      [name, description || null, user.id]
     );
     const researchId = researchResult.rows[0].id;
 

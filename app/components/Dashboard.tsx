@@ -1,6 +1,7 @@
 "use client";
 
 import { Account, Post, Research } from "../lib/db";
+import { createClient } from "../lib/supabase/browser";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
@@ -83,6 +84,7 @@ interface DashboardProps {
     sortDir: string;
   };
   researches: Research[];
+  userEmail?: string;
 }
 
 export function Dashboard({
@@ -94,6 +96,7 @@ export function Dashboard({
   pageSize,
   filters,
   researches,
+  userEmail,
 }: DashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -245,6 +248,24 @@ export function Dashboard({
             </button>
           ))}
         </div>
+
+        {/* User */}
+        {userEmail && (
+          <div className="p-3 border-t border-[var(--border)] mt-auto">
+            <p className="text-xs text-[var(--text-muted)] truncate mb-1">{userEmail}</p>
+            <button
+              onClick={async () => {
+                const supabase = createClient();
+                await supabase.auth.signOut();
+                router.push("/login");
+                router.refresh();
+              }}
+              className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main content */}

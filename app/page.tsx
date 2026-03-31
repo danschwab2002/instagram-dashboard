@@ -1,4 +1,5 @@
 import { getAccounts, getPosts, getStats, getResearches } from "./lib/db";
+import { requireUser } from "./lib/auth";
 import { Dashboard } from "./components/Dashboard";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ export default async function Home({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const user = await requireUser();
   const params = await searchParams;
   const accountId = params.account ? parseInt(params.account) : undefined;
   const researchId = params.research ? parseInt(params.research) : undefined;
@@ -22,7 +24,7 @@ export default async function Home({
     getAccounts(researchId),
     getPosts({ accountId, researchId, type, sortBy, sortDir, limit, offset }),
     getStats(accountId, researchId),
-    getResearches(),
+    getResearches(user.id),
   ]);
 
   return (
@@ -35,6 +37,7 @@ export default async function Home({
       pageSize={limit}
       filters={{ accountId, researchId, type, sortBy, sortDir }}
       researches={researches}
+      userEmail={user.email}
     />
   );
 }

@@ -44,7 +44,18 @@ export interface Research {
   accounts_count: number;
 }
 
-export async function getResearches(): Promise<Research[]> {
+export async function getResearches(userId?: string): Promise<Research[]> {
+  if (userId) {
+    const result = await pool.query(`
+      SELECT r.id, r.name, COUNT(ra.account_id)::int as accounts_count
+      FROM researches r
+      LEFT JOIN research_accounts ra ON ra.research_id = r.id
+      WHERE r.user_id = $1
+      GROUP BY r.id
+      ORDER BY r.created_at DESC
+    `, [userId]);
+    return result.rows;
+  }
   const result = await pool.query(`
     SELECT r.id, r.name, COUNT(ra.account_id)::int as accounts_count
     FROM researches r
