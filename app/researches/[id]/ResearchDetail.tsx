@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface Research {
   id: number;
@@ -70,8 +72,23 @@ export function ResearchDetail({
   accounts: Account[];
   stats: Stats;
 }) {
+  const router = useRouter();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const badge = statusBadge(research.status);
   const createdDate = new Date(research.created_at);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/researches/${research.id}`, { method: "DELETE" });
+      if (res.ok) {
+        router.push("/researches");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -143,10 +160,37 @@ export function ResearchDetail({
           {research.description && (
             <p className="text-sm text-[var(--text-muted)] mt-1">{research.description}</p>
           )}
-          <p className="text-xs text-[var(--text-muted)] mt-1">
-            Creada el {createdDate.toLocaleDateString("es-AR")} a las{" "}
-            {createdDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
-          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <p className="text-xs text-[var(--text-muted)]">
+              Creada el {createdDate.toLocaleDateString("es-AR")} a las{" "}
+              {createdDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-xs text-red-400/60 hover:text-red-400 transition-colors"
+              >
+                Eliminar
+              </button>
+            ) : (
+              <span className="flex items-center gap-2">
+                <span className="text-xs text-red-400">Confirmar?</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                >
+                  {deleting ? "Eliminando..." : "Sí, eliminar"}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                >
+                  Cancelar
+                </button>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Stats bar */}
