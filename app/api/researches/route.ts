@@ -86,7 +86,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Disparar webhook de n8n (si está configurado)
+    // 3. Obtener API key de Apify del usuario
+    const profileResult = await client.query(
+      `SELECT apify_api_key FROM user_profiles WHERE user_id = $1`,
+      [user.id]
+    );
+    const apifyApiKey = profileResult.rows[0]?.apify_api_key || null;
+
+    // 4. Disparar webhook de n8n (si está configurado)
     const webhookUrl = process.env.N8N_RESEARCH_WEBHOOK_URL;
     if (webhookUrl) {
       try {
@@ -97,6 +104,7 @@ export async function POST(request: NextRequest) {
             research_id: researchId,
             name,
             usernames,
+            apify_api_key: apifyApiKey,
           }),
         });
         // Actualizar estado a scraping

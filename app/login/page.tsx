@@ -8,35 +8,23 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setMessage("");
     setLoading(true);
 
     const supabase = createClient();
     try {
-      if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        router.push("/");
-        router.refresh();
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
-        setMessage("Cuenta creada. Revisá tu email para confirmar.");
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      router.push("/");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -52,29 +40,6 @@ export default function LoginPage() {
             Antigravity
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">Content Dashboard</p>
-        </div>
-
-        <div className="flex gap-1 mb-4 p-0.5 rounded bg-[var(--bg-tertiary)]">
-          <button
-            onClick={() => { setMode("login"); setError(""); setMessage(""); }}
-            className={`flex-1 py-1.5 text-sm rounded transition-colors ${
-              mode === "login"
-                ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
-                : "text-[var(--text-muted)]"
-            }`}
-          >
-            Iniciar sesión
-          </button>
-          <button
-            onClick={() => { setMode("signup"); setError(""); setMessage(""); }}
-            className={`flex-1 py-1.5 text-sm rounded transition-colors ${
-              mode === "signup"
-                ? "bg-[var(--bg-secondary)] text-[var(--text-primary)]"
-                : "text-[var(--text-muted)]"
-            }`}
-          >
-            Crear cuenta
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -101,18 +66,13 @@ export default function LoginPage() {
           </div>
 
           {error && <p className="text-xs text-red-400">{error}</p>}
-          {message && <p className="text-xs text-green-400">{message}</p>}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2 text-sm rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
           >
-            {loading
-              ? "Cargando..."
-              : mode === "login"
-              ? "Iniciar sesión"
-              : "Crear cuenta"}
+            {loading ? "Cargando..." : "Iniciar sesión"}
           </button>
         </form>
       </div>

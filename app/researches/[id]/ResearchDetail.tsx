@@ -114,6 +114,12 @@ export function ResearchDetail({
           >
             Investigaciones
           </Link>
+          <Link
+            href="/settings"
+            className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+          >
+            Configuración
+          </Link>
         </nav>
 
         {/* Accounts in this research */}
