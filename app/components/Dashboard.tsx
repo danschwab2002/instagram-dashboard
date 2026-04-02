@@ -510,38 +510,7 @@ export function Dashboard({
 
       {/* Video Modal */}
       {selectedPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setSelectedPost(null)}>
-          <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-              <div>
-                <p className="text-sm text-[var(--text-secondary)]">@{selectedPost.username}</p>
-                <p className="text-xs text-[var(--text-muted)]">{selectedPost.type} · {formatDuration(selectedPost.video_duration)}</p>
-              </div>
-              <button onClick={() => setSelectedPost(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2">×</button>
-            </div>
-            {selectedPost.stored_url ? (
-              <div className="bg-black">
-                <video src={selectedPost.stored_url} controls autoPlay className="w-full max-h-[60vh] object-contain" />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-48 bg-[var(--bg-tertiary)] text-[var(--text-muted)] text-sm">Video no disponible</div>
-            )}
-            <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
-              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p><p className="text-sm font-semibold">{formatNumber(selectedPost.video_view_count)}</p></div>
-              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Likes</p><p className="text-sm font-semibold">{formatNumber(selectedPost.likes_count)}</p></div>
-              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Comments</p><p className="text-sm font-semibold">{formatNumber(selectedPost.comments_count)}</p></div>
-              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Shares</p><p className="text-sm font-semibold">{formatNumber(selectedPost.shares_count)}</p></div>
-              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Eng. Rate</p><p className={`text-sm font-semibold ${engagementColor(selectedPost.engagement_rate)}`}>{formatPercent(selectedPost.engagement_rate)}</p></div>
-              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Score</p><p className={`text-sm font-semibold ${scoreColor(selectedPost.performance_score)}`}>{selectedPost.performance_score != null ? (selectedPost.performance_score * 100).toFixed(1) : "—"}</p></div>
-            </div>
-            {selectedPost.caption && (
-              <div className="p-4">
-                <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Caption</p>
-                <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{selectedPost.caption}</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <PostModal post={selectedPost} onClose={() => setSelectedPost(null)} />
       )}
     </div>
   );
@@ -737,6 +706,131 @@ function StatGroup({ label, avg, min, max, color }: { label: string; avg: string
       <div className="flex gap-2 mt-0.5">
         <span className="text-[10px] text-[var(--text-muted)]">min <span className="text-[var(--text-secondary)]">{min}</span></span>
         <span className="text-[10px] text-[var(--text-muted)]">max <span className="text-[var(--text-secondary)]">{max}</span></span>
+      </div>
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function PostModal({ post, onClose }: { post: Post; onClose: () => void }) {
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisFetched, setAnalysisFetched] = useState(false);
+
+  const loadAnalysis = async () => {
+    if (analysisFetched) {
+      setShowAnalysis(!showAnalysis);
+      return;
+    }
+    setShowAnalysis(true);
+    setAnalysisLoading(true);
+    try {
+      const res = await fetch(`/api/posts/${post.id}/analysis`);
+      if (res.ok) {
+        const data = await res.json();
+        setAnalysis(data.analysis);
+      }
+    } finally {
+      setAnalysisLoading(false);
+      setAnalysisFetched(true);
+    }
+  };
+
+  const analysisFields = analysis ? [
+    { label: "Hook", items: [
+      { key: "Texto", value: analysis.hook_text },
+      { key: "Tipo", value: analysis.hook_type },
+      { key: "Score", value: analysis.hook_score != null ? `${analysis.hook_score}/10` : null },
+    ]},
+    { label: "Contenido", items: [
+      { key: "Ángulo", value: analysis.content_angle },
+      { key: "Tema", value: analysis.content_topic },
+      { key: "Formato", value: analysis.content_format },
+    ]},
+    { label: "Visual", items: [
+      { key: "Estilo", value: analysis.visual_style },
+    ]},
+    { label: "Análisis", items: [
+      { key: "Por qué funciona", value: analysis.why_it_works },
+      { key: "Cómo replicar", value: analysis.replication_notes },
+    ]},
+  ] : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+          <div>
+            <p className="text-sm text-[var(--text-secondary)]">@{post.username}</p>
+            <p className="text-xs text-[var(--text-muted)]">{post.type} · {formatDuration(post.video_duration)}</p>
+          </div>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2">×</button>
+        </div>
+        {post.stored_url ? (
+          <div className="bg-black">
+            <video src={post.stored_url} controls autoPlay className="w-full max-h-[60vh] object-contain" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-48 bg-[var(--bg-tertiary)] text-[var(--text-muted)] text-sm">Video no disponible</div>
+        )}
+        <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p><p className="text-sm font-semibold">{formatNumber(post.video_view_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Likes</p><p className="text-sm font-semibold">{formatNumber(post.likes_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Comments</p><p className="text-sm font-semibold">{formatNumber(post.comments_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Shares</p><p className="text-sm font-semibold">{formatNumber(post.shares_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Eng. Rate</p><p className={`text-sm font-semibold ${engagementColor(post.engagement_rate)}`}>{formatPercent(post.engagement_rate)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Score</p><p className={`text-sm font-semibold ${scoreColor(post.performance_score)}`}>{post.performance_score != null ? (post.performance_score * 100).toFixed(1) : "—"}</p></div>
+        </div>
+        {post.caption && (
+          <div className="p-4 border-b border-[var(--border)]">
+            <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Caption</p>
+            <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{post.caption}</p>
+          </div>
+        )}
+
+        {/* AI Analysis section */}
+        <div className="p-4">
+          <button
+            onClick={loadAnalysis}
+            className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            <span>{showAnalysis ? "▼" : "▶"}</span>
+            <span>Análisis IA</span>
+            <AiStatusBadge status={post.analysis_status || "pending"} />
+          </button>
+
+          {showAnalysis && (
+            <div className="mt-3">
+              {analysisLoading ? (
+                <p className="text-xs text-[var(--text-muted)]">Cargando análisis...</p>
+              ) : !analysis ? (
+                <p className="text-xs text-[var(--text-muted)]">Este post aún no fue analizado con IA.</p>
+              ) : (
+                <div className="space-y-3">
+                  {analysisFields.map(section => {
+                    const visibleItems = section.items.filter(i => i.value != null && i.value !== "");
+                    if (visibleItems.length === 0) return null;
+                    return (
+                      <div key={section.label}>
+                        <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1 font-semibold">{section.label}</p>
+                        <div className="space-y-1">
+                          {visibleItems.map(item => (
+                            <div key={item.key} className="flex gap-2">
+                              <span className="text-xs text-[var(--text-muted)] shrink-0 w-28">{item.key}:</span>
+                              <span className="text-xs text-[var(--text-secondary)]">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
