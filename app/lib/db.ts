@@ -37,6 +37,8 @@ export interface Post {
   product_type: string | null;
   hashtags: string[];
   owner_email: string | null;
+  scraped_at: string | null;
+  analysis_status: string | null;
 }
 
 export interface Research {
@@ -240,6 +242,7 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
       p.video_view_count, p.video_play_count, p.video_duration,
       p.engagement_rate, p.performance_score, p.posted_at, p.url,
       p.display_url, p.stored_url, p.product_type,
+      p.scraped_at, COALESCE(p.analysis_status, 'pending') as analysis_status,
       COALESCE(
         (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
         ARRAY[]::TEXT[]

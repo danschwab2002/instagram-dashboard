@@ -90,6 +90,8 @@ const ALL_COLUMNS = [
   { key: "score", label: "Score", default: true, sortKey: "performance_score" },
   { key: "duration", label: "Dur.", default: true, sortKey: "video_duration" },
   { key: "date", label: "Fecha", default: true, sortKey: "posted_at" },
+  { key: "scraped_at", label: "Scrapeado", default: false },
+  { key: "ai_status", label: "IA", default: true },
 ];
 
 // ── Main Component ───────────────────────────────────────
@@ -414,6 +416,8 @@ export function Dashboard({
                 {visibleCols.has("score") && <SortHeader col="performance_score" label="Score" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
                 {visibleCols.has("duration") && <SortHeader col="video_duration" label="Dur." current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
                 {visibleCols.has("date") && <SortHeader col="posted_at" label="Fecha" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
+                {visibleCols.has("scraped_at") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Scrapeado</th>}
+                {visibleCols.has("ai_status") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">IA</th>}
               </tr>
             </thead>
             <tbody>
@@ -470,6 +474,16 @@ export function Dashboard({
                     )}
                     {visibleCols.has("duration") && <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs tabular-nums">{formatDuration(post.video_duration)}</td>}
                     {visibleCols.has("date") && <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs tabular-nums">{timeAgo(post.posted_at)}</td>}
+                    {visibleCols.has("scraped_at") && (
+                      <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs tabular-nums">
+                        {post.scraped_at ? timeAgo(post.scraped_at) : "—"}
+                      </td>
+                    )}
+                    {visibleCols.has("ai_status") && (
+                      <td className="px-3 py-2.5">
+                        <AiStatusBadge status={post.analysis_status || "pending"} />
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -726,6 +740,19 @@ function StatGroup({ label, avg, min, max, color }: { label: string; avg: string
       </div>
     </div>
   );
+}
+
+function AiStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "completed":
+      return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-green-500/15 text-green-400 border-green-500/30">Analizado</span>;
+    case "analyzing":
+      return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/15 text-yellow-400 border-yellow-500/30">Analizando...</span>;
+    case "failed":
+      return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/15 text-red-400 border-red-500/30">Error</span>;
+    default:
+      return <span className="text-[10px] text-[var(--text-muted)]">—</span>;
+  }
 }
 
 function SortHeader({ col, label, current, icon, onClick }: {
