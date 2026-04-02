@@ -743,16 +743,16 @@ function StatGroup({ label, avg, min, max, color }: { label: string; avg: string
 }
 
 function AiStatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "completed":
-      return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-green-500/15 text-green-400 border-green-500/30">Analizado</span>;
-    case "analyzing":
-      return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/15 text-yellow-400 border-yellow-500/30">Analizando...</span>;
-    case "failed":
-      return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/15 text-red-400 border-red-500/30">Error</span>;
-    default:
-      return <span className="text-[10px] text-[var(--text-muted)]">—</span>;
+  if (status === "finished" || status === "completed") {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-green-500/15 text-green-400 border-green-500/30">Analizado</span>;
   }
+  if (status === "analyzing") {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/15 text-yellow-400 border-yellow-500/30">Analizando...</span>;
+  }
+  if (status.startsWith("error")) {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/15 text-red-400 border-red-500/30">Error</span>;
+  }
+  return <span className="text-[10px] text-[var(--text-muted)]">—</span>;
 }
 
 function SortHeader({ col, label, current, icon, onClick }: {
