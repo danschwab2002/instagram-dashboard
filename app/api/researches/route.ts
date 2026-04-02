@@ -38,11 +38,13 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const body = await request.json();
-  const { name, description, usernames } = body as {
+  const { name, description, usernames, days_back } = body as {
     name: string;
     description?: string;
     usernames: string[];
+    days_back?: number;
   };
+  const daysBack = Math.max(1, Math.min(365, days_back || 30));
 
   if (!name || !usernames?.length) {
     return NextResponse.json(
@@ -57,8 +59,8 @@ export async function POST(request: NextRequest) {
 
     // 1. Crear la investigación con user_id
     const researchResult = await client.query(
-      `INSERT INTO researches (name, description, status, user_id) VALUES ($1, $2, 'draft', $3) RETURNING id`,
-      [name, description || null, user.id]
+      `INSERT INTO researches (name, description, status, user_id, days_back) VALUES ($1, $2, 'draft', $3, $4) RETURNING id`,
+      [name, description || null, user.id, daysBack]
     );
     const researchId = researchResult.rows[0].id;
 
@@ -104,6 +106,7 @@ export async function POST(request: NextRequest) {
             research_id: researchId,
             name,
             usernames,
+            days_back: daysBack,
             apify_api_key: apifyApiKey,
           }),
         });

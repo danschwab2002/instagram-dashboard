@@ -52,6 +52,7 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [accountsInput, setAccountsInput] = useState("");
+  const [daysBack, setDaysBack] = useState(30);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,6 +73,7 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
           name: name.trim(),
           description: description.trim() || undefined,
           usernames: parsedUsernames,
+          days_back: daysBack,
         }),
       });
 
@@ -84,6 +86,7 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
       setName("");
       setDescription("");
       setAccountsInput("");
+      setDaysBack(30);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -172,6 +175,25 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
                     placeholder="Breve descripción del objetivo de esta investigación"
                     className="w-full px-3 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1">
+                    Días hacia atrás
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={daysBack}
+                      onChange={(e) => setDaysBack(Math.max(1, Math.min(365, parseInt(e.target.value) || 30)))}
+                      min={1}
+                      max={365}
+                      className="w-24 px-3 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 tabular-nums"
+                    />
+                    <span className="text-xs text-[var(--text-muted)]">
+                      Scrapear posts de los últimos {daysBack} días
+                    </span>
+                  </div>
                 </div>
 
                 <div>
