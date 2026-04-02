@@ -45,6 +45,33 @@ export interface Research {
   accounts_count: number;
 }
 
+export interface PostFilters {
+  researchId?: number;
+  accountIds?: number[];
+  ownerEmail?: string;
+  type?: string;
+  captionSearch?: string;
+  hashtag?: string;
+  viewsMin?: number;
+  viewsMax?: number;
+  likesMin?: number;
+  likesMax?: number;
+  commentsMin?: number;
+  commentsMax?: number;
+  engagementMin?: number;
+  engagementMax?: number;
+  scoreMin?: number;
+  scoreMax?: number;
+  durationMin?: number;
+  durationMax?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortDir?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export async function getResearches(userId?: string): Promise<Research[]> {
   if (userId) {
     const result = await pool.query(`
@@ -86,23 +113,25 @@ export async function getAccounts(researchId?: number): Promise<Account[]> {
   return result.rows;
 }
 
-export async function getPosts(params: {
-  accountId?: number;
-  researchId?: number;
-  type?: string;
-  sortBy?: string;
-  sortDir?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<{ posts: Post[]; total: number }> {
+export async function getOwners(): Promise<string[]> {
+  const result = await pool.query(`
+    SELECT DISTINCT u.email
+    FROM researches r
+    JOIN auth.users u ON u.id = r.user_id
+    WHERE r.user_id IS NOT NULL
+    ORDER BY u.email
+  `);
+  return result.rows.map((r: { email: string }) => r.email);
+}
+
+export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; total: number }> {
   const {
-    accountId,
-    researchId,
-    type,
-    sortBy = "performance_score",
-    sortDir = "DESC",
-    limit = 50,
-    offset = 0,
+    researchId, accountIds, ownerEmail, type, captionSearch, hashtag,
+    viewsMin, viewsMax, likesMin, likesMax, commentsMin, commentsMax,
+    engagementMin, engagementMax, scoreMin, scoreMax,
+    durationMin, durationMax, dateFrom, dateTo,
+    sortBy = "performance_score", sortDir = "DESC",
+    limit = 100, offset = 0,
   } = params;
 
   const allowedSorts: Record<string, string> = {
@@ -112,6 +141,7 @@ export async function getPosts(params: {
     comments_count: "p.comments_count",
     shares_count: "p.shares_count",
     video_view_count: "p.video_view_count",
+    video_duration: "p.video_duration",
     posted_at: "p.posted_at",
   };
 
@@ -122,31 +152,87 @@ export async function getPosts(params: {
   const values: (string | number)[] = [];
   let paramIdx = 1;
   let joinClause = "";
+  let needsOwnerJoin = false;
 
+  // Research filter
   if (researchId) {
     joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
     conditions.push(`ra.research_id = $${paramIdx++}`);
     values.push(researchId);
   }
-  if (accountId) {
-    conditions.push(`p.account_id = $${paramIdx++}`);
-    values.push(accountId);
+
+  // Account filter (multiple)
+  if (accountIds && accountIds.length > 0) {
+    const placeholders = accountIds.map(() => `$${paramIdx++}`).join(",");
+    conditions.push(`p.account_id IN (${placeholders})`);
+    values.push(...accountIds);
   }
+
+  // Owner filter
+  if (ownerEmail) {
+    needsOwnerJoin = true;
+    conditions.push(`owner_u.email = $${paramIdx++}`);
+    values.push(ownerEmail);
+  }
+
+  // Type filter
   if (type && type !== "all") {
     conditions.push(`p.type = $${paramIdx++}`);
     values.push(type);
   }
 
+  // Caption search
+  if (captionSearch) {
+    conditions.push(`p.caption ILIKE $${paramIdx++}`);
+    values.push(`%${captionSearch}%`);
+  }
+
+  // Hashtag filter
+  if (hashtag) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM post_hashtags ph
+      JOIN hashtags h ON h.id = ph.hashtag_id
+      WHERE ph.post_id = p.id AND h.tag ILIKE $${paramIdx++}
+    )`);
+    values.push(hashtag);
+  }
+
+  // Metric range filters
+  if (viewsMin != null) { conditions.push(`p.video_view_count >= $${paramIdx++}`); values.push(viewsMin); }
+  if (viewsMax != null) { conditions.push(`p.video_view_count <= $${paramIdx++}`); values.push(viewsMax); }
+  if (likesMin != null) { conditions.push(`p.likes_count >= $${paramIdx++}`); values.push(likesMin); }
+  if (likesMax != null) { conditions.push(`p.likes_count <= $${paramIdx++}`); values.push(likesMax); }
+  if (commentsMin != null) { conditions.push(`p.comments_count >= $${paramIdx++}`); values.push(commentsMin); }
+  if (commentsMax != null) { conditions.push(`p.comments_count <= $${paramIdx++}`); values.push(commentsMax); }
+  if (engagementMin != null) { conditions.push(`p.engagement_rate >= $${paramIdx++}`); values.push(engagementMin); }
+  if (engagementMax != null) { conditions.push(`p.engagement_rate <= $${paramIdx++}`); values.push(engagementMax); }
+  if (scoreMin != null) { conditions.push(`p.performance_score >= $${paramIdx++}`); values.push(scoreMin); }
+  if (scoreMax != null) { conditions.push(`p.performance_score <= $${paramIdx++}`); values.push(scoreMax); }
+  if (durationMin != null) { conditions.push(`p.video_duration >= $${paramIdx++}`); values.push(durationMin); }
+  if (durationMax != null) { conditions.push(`p.video_duration <= $${paramIdx++}`); values.push(durationMax); }
+
+  // Date range
+  if (dateFrom) { conditions.push(`p.posted_at >= $${paramIdx++}`); values.push(dateFrom); }
+  if (dateTo) { conditions.push(`p.posted_at <= $${paramIdx++}`); values.push(dateTo + "T23:59:59Z"); }
+
+  const ownerJoin = needsOwnerJoin
+    ? `JOIN research_accounts owner_ra ON owner_ra.account_id = p.account_id
+       JOIN researches owner_r ON owner_r.id = owner_ra.research_id
+       JOIN auth.users owner_u ON owner_u.id = owner_r.user_id`
+    : "";
+
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const countResult = await pool.query(
-    `SELECT COUNT(*) FROM posts p ${joinClause} ${where}`,
+    `SELECT COUNT(DISTINCT p.id) FROM posts p
+     LEFT JOIN accounts a ON a.id = p.account_id
+     ${joinClause} ${ownerJoin} ${where}`,
     values
   );
   const total = parseInt(countResult.rows[0].count, 10);
 
   const result = await pool.query(
-    `SELECT
+    `SELECT DISTINCT ON (p.id, ${orderCol})
       p.id, p.short_code, COALESCE(a.username, 'desconocido') as username,
       COALESCE(a.account_type, 'competitor') as account_type,
       COALESCE(a.followers_count, 0) as followers_count,
@@ -166,9 +252,9 @@ export async function getPosts(params: {
       ) as owner_email
     FROM posts p
     LEFT JOIN accounts a ON a.id = p.account_id
-    ${joinClause}
+    ${joinClause} ${ownerJoin}
     ${where}
-    ORDER BY ${orderCol} ${dir} NULLS LAST
+    ORDER BY ${orderCol} ${dir} NULLS LAST, p.id
     LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
     [...values, limit, offset]
   );
@@ -176,26 +262,26 @@ export async function getPosts(params: {
   return { posts: result.rows, total };
 }
 
-export async function getStats(accountId?: number, researchId?: number): Promise<{
+export async function getStats(filters: PostFilters = {}): Promise<{
   totalPosts: number;
   totalVideos: number;
   avgEngagement: number;
   avgViews: number;
   totalAccounts: number;
 }> {
-  const conditions: string[] = [];
-  const values: number[] = [];
-  let joinClause = "";
-  let paramIdx = 1;
+  // Reuse getPosts logic for consistent filtering, but just get counts
+  const { total } = await getPosts({ ...filters, limit: 0, offset: 0 });
 
-  if (researchId) {
+  // For stats, do a simpler query with same filters
+  const conditions: string[] = [];
+  const values: (string | number)[] = [];
+  let paramIdx = 1;
+  let joinClause = "";
+
+  if (filters.researchId) {
     joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
     conditions.push(`ra.research_id = $${paramIdx++}`);
-    values.push(researchId);
-  }
-  if (accountId) {
-    conditions.push(`p.account_id = $${paramIdx++}`);
-    values.push(accountId);
+    values.push(filters.researchId);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -211,10 +297,10 @@ export async function getStats(accountId?: number, researchId?: number): Promise
   );
 
   let accountsTotal: number;
-  if (researchId) {
+  if (filters.researchId) {
     const accountsResult = await pool.query(
       `SELECT COUNT(*)::int as total FROM research_accounts WHERE research_id = $1`,
-      [researchId]
+      [filters.researchId]
     );
     accountsTotal = accountsResult.rows[0].total || 0;
   } else {

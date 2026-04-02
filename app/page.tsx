@@ -1,8 +1,20 @@
-import { getAccounts, getPosts, getStats, getResearches } from "./lib/db";
+import { getAccounts, getPosts, getStats, getResearches, getOwners, PostFilters } from "./lib/db";
 import { requireUser } from "./lib/auth";
 import { Dashboard } from "./components/Dashboard";
 
 export const dynamic = "force-dynamic";
+
+function parseNum(v: string | undefined): number | undefined {
+  if (!v) return undefined;
+  const n = parseFloat(v);
+  return isNaN(n) ? undefined : n;
+}
+
+function parseIds(v: string | undefined): number[] | undefined {
+  if (!v) return undefined;
+  const ids = v.split(",").map(Number).filter(n => !isNaN(n));
+  return ids.length > 0 ? ids : undefined;
+}
 
 export default async function Home({
   searchParams,
@@ -11,20 +23,42 @@ export default async function Home({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const accountId = params.account ? parseInt(params.account) : undefined;
-  const researchId = params.research ? parseInt(params.research) : undefined;
-  const type = params.type || "all";
-  const sortBy = params.sort || "performance_score";
-  const sortDir = params.dir || "DESC";
-  const page = parseInt(params.page || "1");
-  const limit = 100;
-  const offset = (page - 1) * limit;
 
-  const [accounts, { posts, total }, stats, researches] = await Promise.all([
-    getAccounts(researchId),
-    getPosts({ accountId, researchId, type, sortBy, sortDir, limit, offset }),
-    getStats(accountId, researchId),
+  const filters: PostFilters = {
+    researchId: parseNum(params.research),
+    accountIds: parseIds(params.accounts),
+    ownerEmail: params.owner,
+    type: params.type || "all",
+    captionSearch: params.caption,
+    hashtag: params.hashtag,
+    viewsMin: parseNum(params.viewsMin),
+    viewsMax: parseNum(params.viewsMax),
+    likesMin: parseNum(params.likesMin),
+    likesMax: parseNum(params.likesMax),
+    commentsMin: parseNum(params.commentsMin),
+    commentsMax: parseNum(params.commentsMax),
+    engagementMin: parseNum(params.engMin),
+    engagementMax: parseNum(params.engMax),
+    scoreMin: parseNum(params.scoreMin),
+    scoreMax: parseNum(params.scoreMax),
+    durationMin: parseNum(params.durMin),
+    durationMax: parseNum(params.durMax),
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    sortBy: params.sort || "performance_score",
+    sortDir: params.dir || "DESC",
+    limit: 100,
+    offset: ((parseInt(params.page || "1") - 1) * 100),
+  };
+
+  const page = parseInt(params.page || "1");
+
+  const [accounts, { posts, total }, stats, researches, owners] = await Promise.all([
+    getAccounts(filters.researchId),
+    getPosts(filters),
+    getStats({ researchId: filters.researchId }),
     getResearches(user.id),
+    getOwners(),
   ]);
 
   return (
@@ -34,9 +68,10 @@ export default async function Home({
       stats={stats}
       total={total}
       currentPage={page}
-      pageSize={limit}
-      filters={{ accountId, researchId, type, sortBy, sortDir }}
+      pageSize={100}
+      filters={filters}
       researches={researches}
+      owners={owners}
       userEmail={user.email}
     />
   );
