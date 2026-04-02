@@ -318,33 +318,66 @@ function buildFilterClauses(params: PostFilters) {
   return { conditions, values, paramIdx, joinClause, ownerJoin, where };
 }
 
-export async function getStats(filters: PostFilters = {}): Promise<{
+export interface Stats {
   totalPosts: number;
   totalVideos: number;
-  avgEngagement: number;
-  avgViews: number;
   totalAccounts: number;
-}> {
+  avgEngagement: number;
+  minEngagement: number;
+  maxEngagement: number;
+  avgViews: number;
+  minViews: number;
+  maxViews: number;
+  avgLikes: number;
+  minLikes: number;
+  maxLikes: number;
+  avgComments: number;
+  minComments: number;
+  maxComments: number;
+}
+
+export async function getStats(filters: PostFilters = {}): Promise<Stats> {
   const { values, joinClause, ownerJoin, where } = buildFilterClauses(filters);
 
   const result = await pool.query(
     `SELECT
       COUNT(DISTINCT p.id)::int as total_posts,
       COUNT(DISTINCT p.id) FILTER (WHERE p.type = 'Video')::int as total_videos,
+      COUNT(DISTINCT p.account_id)::int as total_accounts,
       ROUND(AVG(p.engagement_rate)::numeric, 4) as avg_engagement,
+      ROUND(MIN(p.engagement_rate)::numeric, 4) as min_engagement,
+      ROUND(MAX(p.engagement_rate)::numeric, 4) as max_engagement,
       ROUND(AVG(p.video_view_count) FILTER (WHERE p.video_view_count IS NOT NULL))::int as avg_views,
-      COUNT(DISTINCT p.account_id)::int as total_accounts
+      MIN(p.video_view_count) FILTER (WHERE p.video_view_count IS NOT NULL) as min_views,
+      MAX(p.video_view_count) FILTER (WHERE p.video_view_count IS NOT NULL) as max_views,
+      ROUND(AVG(p.likes_count))::int as avg_likes,
+      MIN(p.likes_count) as min_likes,
+      MAX(p.likes_count) as max_likes,
+      ROUND(AVG(p.comments_count))::int as avg_comments,
+      MIN(p.comments_count) as min_comments,
+      MAX(p.comments_count) as max_comments
     FROM posts p
     LEFT JOIN accounts a ON a.id = p.account_id
     ${joinClause} ${ownerJoin} ${where}`,
     values
   );
 
+  const r = result.rows[0];
   return {
-    totalPosts: result.rows[0].total_posts || 0,
-    totalVideos: result.rows[0].total_videos || 0,
-    avgEngagement: parseFloat(result.rows[0].avg_engagement) || 0,
-    avgViews: result.rows[0].avg_views || 0,
-    totalAccounts: result.rows[0].total_accounts || 0,
+    totalPosts: r.total_posts || 0,
+    totalVideos: r.total_videos || 0,
+    totalAccounts: r.total_accounts || 0,
+    avgEngagement: parseFloat(r.avg_engagement) || 0,
+    minEngagement: parseFloat(r.min_engagement) || 0,
+    maxEngagement: parseFloat(r.max_engagement) || 0,
+    avgViews: r.avg_views || 0,
+    minViews: r.min_views || 0,
+    maxViews: r.max_views || 0,
+    avgLikes: r.avg_likes || 0,
+    minLikes: r.min_likes || 0,
+    maxLikes: r.max_likes || 0,
+    avgComments: r.avg_comments || 0,
+    minComments: r.min_comments || 0,
+    maxComments: r.max_comments || 0,
   };
 }

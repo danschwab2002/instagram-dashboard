@@ -1,6 +1,6 @@
 "use client";
 
-import { Account, Post, Research, PostFilters } from "../lib/db";
+import { Account, Post, Research, PostFilters, Stats } from "../lib/db";
 import { createClient } from "../lib/supabase/browser";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -97,7 +97,7 @@ const ALL_COLUMNS = [
 interface DashboardProps {
   accounts: Account[];
   posts: Post[];
-  stats: { totalPosts: number; totalVideos: number; avgEngagement: number; avgViews: number; totalAccounts: number };
+  stats: Stats;
   total: number;
   currentPage: number;
   pageSize: number;
@@ -285,12 +285,35 @@ export function Dashboard({
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Stats bar */}
-        <div className="flex items-center gap-6 px-5 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+        <div className="flex items-center gap-4 px-5 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)] overflow-x-auto">
           <StatCard label="Posts" value={formatNumber(stats.totalPosts)} />
           <StatCard label="Reels" value={formatNumber(stats.totalVideos)} />
-          <StatCard label="Eng. promedio" value={formatPercent(stats.avgEngagement)} color={engagementColor(stats.avgEngagement)} />
-          <StatCard label="Views promedio" value={formatNumber(stats.avgViews)} />
-          <div className="ml-auto flex items-center gap-2">
+          <StatGroup
+            label="Views"
+            avg={formatNumber(stats.avgViews)}
+            min={formatNumber(stats.minViews)}
+            max={formatNumber(stats.maxViews)}
+          />
+          <StatGroup
+            label="Likes"
+            avg={formatNumber(stats.avgLikes)}
+            min={formatNumber(stats.minLikes)}
+            max={formatNumber(stats.maxLikes)}
+          />
+          <StatGroup
+            label="Comments"
+            avg={formatNumber(stats.avgComments)}
+            min={formatNumber(stats.minComments)}
+            max={formatNumber(stats.maxComments)}
+          />
+          <StatGroup
+            label="Eng. Rate"
+            avg={formatPercent(stats.avgEngagement)}
+            min={formatPercent(stats.minEngagement)}
+            max={formatPercent(stats.maxEngagement)}
+            color={engagementColor(stats.avgEngagement)}
+          />
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             <span className="text-xs text-[var(--text-muted)]">
               {total} resultados{totalPages > 1 && ` — pág ${currentPage}/${totalPages}`}
             </span>
@@ -685,9 +708,22 @@ function DebouncedInput({
 
 function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div>
+    <div className="shrink-0">
       <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
       <p className={`text-lg font-semibold ${color || "text-[var(--text-primary)]"}`}>{value}</p>
+    </div>
+  );
+}
+
+function StatGroup({ label, avg, min, max, color }: { label: string; avg: string; min: string; max: string; color?: string }) {
+  return (
+    <div className="shrink-0 border-l border-[var(--border)] pl-4">
+      <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
+      <p className={`text-base font-semibold ${color || "text-[var(--text-primary)]"}`}>{avg}</p>
+      <div className="flex gap-2 mt-0.5">
+        <span className="text-[10px] text-[var(--text-muted)]">min <span className="text-[var(--text-secondary)]">{min}</span></span>
+        <span className="text-[10px] text-[var(--text-muted)]">max <span className="text-[var(--text-secondary)]">{max}</span></span>
+      </div>
     </div>
   );
 }
