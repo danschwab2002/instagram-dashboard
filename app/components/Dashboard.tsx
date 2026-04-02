@@ -4,7 +4,7 @@ import { Account, Post, Research, PostFilters } from "../lib/db";
 import { createClient } from "../lib/supabase/browser";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState, useMemo } from "react";
+import { useCallback, useState, useMemo, useRef, useEffect } from "react";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -570,23 +570,23 @@ function FilterControl({
   }
 
   if (def.type === "range") {
-    const minVal = searchParams.get(def.keyMin) || "";
-    const maxVal = searchParams.get(def.keyMax) || "";
     return (
       <div>
         <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1">{def.label}</label>
         <div className="flex gap-1">
-          <input
+          <DebouncedInput
             type="number"
-            value={minVal}
-            onChange={e => updateParams({ [def.keyMin]: e.target.value || undefined })}
+            paramKey={def.keyMin}
+            searchParams={searchParams}
+            updateParams={updateParams}
             placeholder={def.placeholder?.[0] || "Min"}
             className="w-1/2 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500 tabular-nums"
           />
-          <input
+          <DebouncedInput
             type="number"
-            value={maxVal}
-            onChange={e => updateParams({ [def.keyMax]: e.target.value || undefined })}
+            paramKey={def.keyMax}
+            searchParams={searchParams}
+            updateParams={updateParams}
             placeholder={def.placeholder?.[1] || "Max"}
             className="w-1/2 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500 tabular-nums"
           />
@@ -596,22 +596,22 @@ function FilterControl({
   }
 
   if (def.type === "daterange") {
-    const from = searchParams.get(def.keyFrom) || "";
-    const to = searchParams.get(def.keyTo) || "";
     return (
       <div>
         <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1">{def.label}</label>
         <div className="flex gap-1">
-          <input
+          <DebouncedInput
             type="date"
-            value={from}
-            onChange={e => updateParams({ [def.keyFrom]: e.target.value || undefined })}
+            paramKey={def.keyFrom}
+            searchParams={searchParams}
+            updateParams={updateParams}
             className="w-1/2 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-indigo-500"
           />
-          <input
+          <DebouncedInput
             type="date"
-            value={to}
-            onChange={e => updateParams({ [def.keyTo]: e.target.value || undefined })}
+            paramKey={def.keyTo}
+            searchParams={searchParams}
+            updateParams={updateParams}
             className="w-1/2 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-indigo-500"
           />
         </div>
@@ -620,14 +620,14 @@ function FilterControl({
   }
 
   if (def.type === "text") {
-    const current = searchParams.get(def.paramKey) || "";
     return (
       <div>
         <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1">{def.label}</label>
-        <input
+        <DebouncedInput
           type="text"
-          value={current}
-          onChange={e => updateParams({ [def.paramKey]: e.target.value || undefined })}
+          paramKey={def.paramKey}
+          searchParams={searchParams}
+          updateParams={updateParams}
           placeholder={def.placeholder}
           className="w-full px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500"
         />
@@ -639,6 +639,49 @@ function FilterControl({
 }
 
 // ── Sub-components ───────────────────────────────────────
+
+function DebouncedInput({
+  paramKey,
+  searchParams,
+  updateParams,
+  type = "text",
+  placeholder,
+  className,
+}: {
+  paramKey: string;
+  searchParams: ReturnType<typeof useSearchParams>;
+  updateParams: (updates: Record<string, string | undefined>) => void;
+  type?: string;
+  placeholder?: string;
+  className?: string;
+}) {
+  const urlValue = searchParams.get(paramKey) || "";
+  const [local, setLocal] = useState(urlValue);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Sync from URL when it changes externally (e.g. "clear filters")
+  useEffect(() => {
+    setLocal(urlValue);
+  }, [urlValue]);
+
+  const handleChange = (val: string) => {
+    setLocal(val);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      updateParams({ [paramKey]: val || undefined });
+    }, 600);
+  };
+
+  return (
+    <input
+      type={type}
+      value={local}
+      onChange={e => handleChange(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
 
 function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
