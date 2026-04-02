@@ -183,11 +183,28 @@ export function Dashboard({
     return filters.sortDir === "DESC" ? "↓" : "↑";
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === posts.length) {
+  const [selectingAll, setSelectingAll] = useState(false);
+
+  const toggleSelectAll = async () => {
+    if (selectedIds.size > 0) {
       setSelectedIds(new Set());
-    } else {
+      return;
+    }
+    // If total fits in one page, just select what we have
+    if (total <= pageSize) {
       setSelectedIds(new Set(posts.map(p => p.id)));
+      return;
+    }
+    // Otherwise, fetch ALL matching IDs from the API
+    setSelectingAll(true);
+    try {
+      const res = await fetch(`/api/posts/ids?${searchParams.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedIds(new Set(data.ids));
+      }
+    } finally {
+      setSelectingAll(false);
     }
   };
 
@@ -350,12 +367,16 @@ export function Dashboard({
             <thead className="sticky top-0 z-10 bg-[var(--bg-tertiary)] border-b border-[var(--border)]">
               <tr>
                 <th className="px-3 py-2 w-8">
-                  <input
-                    type="checkbox"
-                    checked={posts.length > 0 && selectedIds.size === posts.length}
-                    onChange={toggleSelectAll}
-                    className="accent-indigo-500"
-                  />
+                  {selectingAll ? (
+                    <span className="text-[10px] text-[var(--text-muted)]">...</span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size > 0}
+                      onChange={toggleSelectAll}
+                      className="accent-indigo-500"
+                    />
+                  )}
                 </th>
                 {visibleCols.has("rank") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium w-8">#</th>}
                 {visibleCols.has("caption") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium min-w-[250px]">Post</th>}
@@ -517,23 +538,33 @@ function FilterControl({
   }
 
   if (def.type === "multiselect") {
-    const current = searchParams.get(def.key)?.split(",").filter(Boolean) || [];
+    const current = new Set(searchParams.get(def.key)?.split(",").filter(Boolean) || []);
+    const toggle = (val: string) => {
+      const next = new Set(current);
+      if (next.has(val)) next.delete(val);
+      else next.add(val);
+      updateParams({ [def.key]: next.size > 0 ? Array.from(next).join(",") : undefined });
+    };
     return (
-      <div>
+      <div className="col-span-2">
         <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1">
-          {def.label}{current.length > 0 && ` (${current.length})`}
+          {def.label}{current.size > 0 && ` (${current.size})`}
         </label>
-        <select
-          multiple
-          value={current}
-          onChange={e => {
-            const selected = Array.from(e.target.selectedOptions).map(o => o.value);
-            updateParams({ [def.key]: selected.length > 0 ? selected.join(",") : undefined });
-          }}
-          className="w-full px-2 py-1 text-xs rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-indigo-500 h-20"
-        >
-          {def.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <div className="flex flex-wrap gap-1">
+          {def.options.map(o => (
+            <button
+              key={o.value}
+              onClick={() => toggle(o.value)}
+              className={`px-2 py-1 text-[11px] rounded border transition-colors ${
+                current.has(o.value)
+                  ? "border-indigo-500/50 bg-indigo-500/15 text-indigo-400"
+                  : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
