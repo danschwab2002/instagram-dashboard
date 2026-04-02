@@ -262,6 +262,62 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
   return { posts: result.rows, total };
 }
 
+function buildFilterClauses(params: PostFilters) {
+  const {
+    researchId, accountIds, ownerEmail, type, captionSearch, hashtag,
+    viewsMin, viewsMax, likesMin, likesMax, commentsMin, commentsMax,
+    engagementMin, engagementMax, scoreMin, scoreMax,
+    durationMin, durationMax, dateFrom, dateTo,
+  } = params;
+
+  const conditions: string[] = [];
+  const values: (string | number)[] = [];
+  let paramIdx = 1;
+  let joinClause = "";
+  let ownerJoin = "";
+
+  if (researchId) {
+    joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
+    conditions.push(`ra.research_id = $${paramIdx++}`);
+    values.push(researchId);
+  }
+  if (accountIds && accountIds.length > 0) {
+    const placeholders = accountIds.map(() => `$${paramIdx++}`).join(",");
+    conditions.push(`p.account_id IN (${placeholders})`);
+    values.push(...accountIds);
+  }
+  if (ownerEmail) {
+    ownerJoin = `JOIN research_accounts owner_ra ON owner_ra.account_id = p.account_id
+       JOIN researches owner_r ON owner_r.id = owner_ra.research_id
+       JOIN auth.users owner_u ON owner_u.id = owner_r.user_id`;
+    conditions.push(`owner_u.email = $${paramIdx++}`);
+    values.push(ownerEmail);
+  }
+  if (type && type !== "all") { conditions.push(`p.type = $${paramIdx++}`); values.push(type); }
+  if (captionSearch) { conditions.push(`p.caption ILIKE $${paramIdx++}`); values.push(`%${captionSearch}%`); }
+  if (hashtag) {
+    conditions.push(`EXISTS (SELECT 1 FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id AND h.tag ILIKE $${paramIdx++})`);
+    values.push(hashtag);
+  }
+  if (viewsMin != null) { conditions.push(`p.video_view_count >= $${paramIdx++}`); values.push(viewsMin); }
+  if (viewsMax != null) { conditions.push(`p.video_view_count <= $${paramIdx++}`); values.push(viewsMax); }
+  if (likesMin != null) { conditions.push(`p.likes_count >= $${paramIdx++}`); values.push(likesMin); }
+  if (likesMax != null) { conditions.push(`p.likes_count <= $${paramIdx++}`); values.push(likesMax); }
+  if (commentsMin != null) { conditions.push(`p.comments_count >= $${paramIdx++}`); values.push(commentsMin); }
+  if (commentsMax != null) { conditions.push(`p.comments_count <= $${paramIdx++}`); values.push(commentsMax); }
+  if (engagementMin != null) { conditions.push(`p.engagement_rate >= $${paramIdx++}`); values.push(engagementMin); }
+  if (engagementMax != null) { conditions.push(`p.engagement_rate <= $${paramIdx++}`); values.push(engagementMax); }
+  if (scoreMin != null) { conditions.push(`p.performance_score >= $${paramIdx++}`); values.push(scoreMin); }
+  if (scoreMax != null) { conditions.push(`p.performance_score <= $${paramIdx++}`); values.push(scoreMax); }
+  if (durationMin != null) { conditions.push(`p.video_duration >= $${paramIdx++}`); values.push(durationMin); }
+  if (durationMax != null) { conditions.push(`p.video_duration <= $${paramIdx++}`); values.push(durationMax); }
+  if (dateFrom) { conditions.push(`p.posted_at >= $${paramIdx++}`); values.push(dateFrom); }
+  if (dateTo) { conditions.push(`p.posted_at <= $${paramIdx++}`); values.push(dateTo + "T23:59:59Z"); }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return { conditions, values, paramIdx, joinClause, ownerJoin, where };
+}
+
 export async function getStats(filters: PostFilters = {}): Promise<{
   totalPosts: number;
   totalVideos: number;
@@ -269,50 +325,26 @@ export async function getStats(filters: PostFilters = {}): Promise<{
   avgViews: number;
   totalAccounts: number;
 }> {
-  // Reuse getPosts logic for consistent filtering, but just get counts
-  const { total } = await getPosts({ ...filters, limit: 0, offset: 0 });
-
-  // For stats, do a simpler query with same filters
-  const conditions: string[] = [];
-  const values: (string | number)[] = [];
-  let paramIdx = 1;
-  let joinClause = "";
-
-  if (filters.researchId) {
-    joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
-    conditions.push(`ra.research_id = $${paramIdx++}`);
-    values.push(filters.researchId);
-  }
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const { values, joinClause, ownerJoin, where } = buildFilterClauses(filters);
 
   const result = await pool.query(
     `SELECT
-      COUNT(*)::int as total_posts,
-      COUNT(*) FILTER (WHERE p.type = 'Video')::int as total_videos,
+      COUNT(DISTINCT p.id)::int as total_posts,
+      COUNT(DISTINCT p.id) FILTER (WHERE p.type = 'Video')::int as total_videos,
       ROUND(AVG(p.engagement_rate)::numeric, 4) as avg_engagement,
-      ROUND(AVG(p.video_view_count) FILTER (WHERE p.video_view_count IS NOT NULL))::int as avg_views
-    FROM posts p ${joinClause} ${where}`,
+      ROUND(AVG(p.video_view_count) FILTER (WHERE p.video_view_count IS NOT NULL))::int as avg_views,
+      COUNT(DISTINCT p.account_id)::int as total_accounts
+    FROM posts p
+    LEFT JOIN accounts a ON a.id = p.account_id
+    ${joinClause} ${ownerJoin} ${where}`,
     values
   );
-
-  let accountsTotal: number;
-  if (filters.researchId) {
-    const accountsResult = await pool.query(
-      `SELECT COUNT(*)::int as total FROM research_accounts WHERE research_id = $1`,
-      [filters.researchId]
-    );
-    accountsTotal = accountsResult.rows[0].total || 0;
-  } else {
-    const accountsResult = await pool.query(`SELECT COUNT(*)::int as total FROM accounts`);
-    accountsTotal = accountsResult.rows[0].total || 0;
-  }
 
   return {
     totalPosts: result.rows[0].total_posts || 0,
     totalVideos: result.rows[0].total_videos || 0,
     avgEngagement: parseFloat(result.rows[0].avg_engagement) || 0,
     avgViews: result.rows[0].avg_views || 0,
-    totalAccounts: accountsTotal,
+    totalAccounts: result.rows[0].total_accounts || 0,
   };
 }

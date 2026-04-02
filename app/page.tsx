@@ -56,7 +56,7 @@ export default async function Home({
   const [accounts, { posts, total }, stats, researches, owners] = await Promise.all([
     getAccounts(filters.researchId),
     getPosts(filters),
-    getStats({ researchId: filters.researchId }),
+    getStats(filters),
     getResearches(user.id),
     getOwners(),
   ]);
