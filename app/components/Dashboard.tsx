@@ -300,6 +300,7 @@ export function Dashboard({
                 <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium w-8">#</th>
                 <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium min-w-[300px]">Post</th>
                 <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Cuenta</th>
+                <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Owner</th>
                 <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Tipo</th>
                 <SortHeader col="video_view_count" label="Views" current={filters.sortBy} icon={sortIcon} onClick={toggleSort} />
                 <SortHeader col="likes_count" label="Likes" current={filters.sortBy} icon={sortIcon} onClick={toggleSort} />
@@ -341,6 +342,9 @@ export function Dashboard({
                     <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">
                       @{post.username}
                     </td>
+                    <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs truncate max-w-[120px]" title={post.owner_email || ""}>
+                      {post.owner_email ? post.owner_email.split("@")[0] : "—"}
+                    </td>
                     <td className="px-3 py-2.5">
                       <span className={`text-xs px-1.5 py-0.5 rounded border ${tl.color}`}>
                         {tl.text}
@@ -377,7 +381,7 @@ export function Dashboard({
               })}
               {posts.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-12 text-center text-[var(--text-muted)]">
+                  <td colSpan={13} className="px-3 py-12 text-center text-[var(--text-muted)]">
                     No hay posts con los filtros seleccionados
                   </td>
                 </tr>

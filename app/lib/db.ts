@@ -36,6 +36,7 @@ export interface Post {
   stored_url: string | null;
   product_type: string | null;
   hashtags: string[];
+  owner_email: string | null;
 }
 
 export interface Research {
@@ -156,7 +157,13 @@ export async function getPosts(params: {
       COALESCE(
         (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
         ARRAY[]::TEXT[]
-      ) as hashtags
+      ) as hashtags,
+      (SELECT u.email FROM researches r
+       JOIN research_accounts ra2 ON ra2.research_id = r.id
+       JOIN auth.users u ON u.id = r.user_id
+       WHERE ra2.account_id = p.account_id
+       ORDER BY r.created_at ASC LIMIT 1
+      ) as owner_email
     FROM posts p
     LEFT JOIN accounts a ON a.id = p.account_id
     ${joinClause}
