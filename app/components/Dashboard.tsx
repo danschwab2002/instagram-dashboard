@@ -77,22 +77,24 @@ type FilterDef =
 // ── Column definitions ───────────────────────────────────
 
 const ALL_COLUMNS = [
-  { key: "rank", label: "#", default: true },
-  { key: "caption", label: "Post", default: true },
-  { key: "username", label: "Cuenta", default: true },
-  { key: "owner", label: "Owner", default: true },
-  { key: "type", label: "Tipo", default: true },
-  { key: "views", label: "Views", default: true, sortKey: "video_view_count" },
-  { key: "likes", label: "Likes", default: true, sortKey: "likes_count" },
-  { key: "comments", label: "Comments", default: true, sortKey: "comments_count" },
-  { key: "shares", label: "Shares", default: false, sortKey: "shares_count" },
-  { key: "engagement", label: "Eng. Rate", default: true, sortKey: "engagement_rate" },
-  { key: "score", label: "Score", default: true, sortKey: "performance_score" },
-  { key: "duration", label: "Dur.", default: true, sortKey: "video_duration" },
-  { key: "date", label: "Fecha", default: true, sortKey: "posted_at" },
-  { key: "scraped_at", label: "Scrapeado", default: false },
-  { key: "ai_status", label: "IA", default: true },
+  { key: "rank", label: "#", default: true, tooltip: "Posición en el ranking según el ordenamiento actual" },
+  { key: "caption", label: "Post", default: true, tooltip: "Primera línea del caption del post" },
+  { key: "username", label: "Cuenta", default: true, tooltip: "Cuenta de Instagram que publicó el contenido" },
+  { key: "owner", label: "Owner", default: true, tooltip: "Usuario que disparó el scraping de esta cuenta" },
+  { key: "type", label: "Tipo", default: true, tooltip: "Tipo de contenido: Reel, Image, Carousel, etc." },
+  { key: "views", label: "Views", default: true, sortKey: "video_view_count", tooltip: "Reproducciones del video (video_view_count de Instagram)" },
+  { key: "likes", label: "Likes", default: true, sortKey: "likes_count", tooltip: "Cantidad de likes del post" },
+  { key: "comments", label: "Comments", default: true, sortKey: "comments_count", tooltip: "Cantidad de comentarios del post" },
+  { key: "shares", label: "Shares", default: false, sortKey: "shares_count", tooltip: "Cantidad de veces que fue compartido" },
+  { key: "engagement", label: "Eng. Rate", default: true, sortKey: "engagement_rate", tooltip: "Engagement Rate = (likes + comments + shares) / followers × 100" },
+  { key: "score", label: "Score", default: true, sortKey: "performance_score", tooltip: "Performance Score = (views × 0.4) + (likes × 0.25) + (comments × 0.2) + (shares × 0.15). Normalizado sobre el máximo del dataset" },
+  { key: "duration", label: "Dur.", default: true, sortKey: "video_duration", tooltip: "Duración del video en segundos" },
+  { key: "date", label: "Fecha", default: true, sortKey: "posted_at", tooltip: "Fecha en que se publicó el contenido en Instagram" },
+  { key: "scraped_at", label: "Scrapeado", default: false, tooltip: "Fecha en que se recolectó este post via scraping" },
+  { key: "ai_status", label: "IA", default: true, tooltip: "Estado del análisis con IA: pendiente, analizando, completado o error" },
 ];
+
+const colTooltip = (key: string) => ALL_COLUMNS.find(c => c.key === key)?.tooltip || "";
 
 // ── Main Component ───────────────────────────────────────
 
@@ -405,21 +407,21 @@ export function Dashboard({
                     />
                   )}
                 </th>
-                {visibleCols.has("rank") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium w-8">#</th>}
-                {visibleCols.has("caption") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium min-w-[250px]">Post</th>}
-                {visibleCols.has("username") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Cuenta</th>}
-                {visibleCols.has("owner") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Owner</th>}
-                {visibleCols.has("type") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Tipo</th>}
-                {visibleCols.has("views") && <SortHeader col="video_view_count" label="Views" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("likes") && <SortHeader col="likes_count" label="Likes" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("comments") && <SortHeader col="comments_count" label="Comments" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("shares") && <SortHeader col="shares_count" label="Shares" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("engagement") && <SortHeader col="engagement_rate" label="Eng. Rate" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("score") && <SortHeader col="performance_score" label="Score" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("duration") && <SortHeader col="video_duration" label="Dur." current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("date") && <SortHeader col="posted_at" label="Fecha" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} />}
-                {visibleCols.has("scraped_at") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">Scrapeado</th>}
-                {visibleCols.has("ai_status") && <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium">IA</th>}
+                {visibleCols.has("rank") && <ThWithTooltip label="#" tooltip={colTooltip("rank")} className="w-8" />}
+                {visibleCols.has("caption") && <ThWithTooltip label="Post" tooltip={colTooltip("caption")} className="min-w-[250px]" />}
+                {visibleCols.has("username") && <ThWithTooltip label="Cuenta" tooltip={colTooltip("username")} />}
+                {visibleCols.has("owner") && <ThWithTooltip label="Owner" tooltip={colTooltip("owner")} />}
+                {visibleCols.has("type") && <ThWithTooltip label="Tipo" tooltip={colTooltip("type")} />}
+                {visibleCols.has("views") && <SortHeader col="video_view_count" label="Views" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("views")} />}
+                {visibleCols.has("likes") && <SortHeader col="likes_count" label="Likes" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("likes")} />}
+                {visibleCols.has("comments") && <SortHeader col="comments_count" label="Comments" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("comments")} />}
+                {visibleCols.has("shares") && <SortHeader col="shares_count" label="Shares" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("shares")} />}
+                {visibleCols.has("engagement") && <SortHeader col="engagement_rate" label="Eng. Rate" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("engagement")} />}
+                {visibleCols.has("score") && <SortHeader col="performance_score" label="Score" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("score")} />}
+                {visibleCols.has("duration") && <SortHeader col="video_duration" label="Dur." current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("duration")} />}
+                {visibleCols.has("date") && <SortHeader col="posted_at" label="Fecha" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("date")} />}
+                {visibleCols.has("scraped_at") && <ThWithTooltip label="Scrapeado" tooltip={colTooltip("scraped_at")} />}
+                {visibleCols.has("ai_status") && <ThWithTooltip label="IA" tooltip={colTooltip("ai_status")} />}
               </tr>
             </thead>
             <tbody>
@@ -910,18 +912,36 @@ function AiStatusBadge({ status }: { status: string }) {
   return <span className="text-[10px] text-[var(--text-muted)]">—</span>;
 }
 
-function SortHeader({ col, label, current, icon, onClick }: {
-  col: string; label: string; current: string; icon: (col: string) => string; onClick: (col: string) => void;
+function SortHeader({ col, label, current, icon, onClick, tooltip }: {
+  col: string; label: string; current: string; icon: (col: string) => string; onClick: (col: string) => void; tooltip?: string;
 }) {
   return (
     <th
-      className={`text-left px-3 py-2 font-medium cursor-pointer select-none hover:text-[var(--text-primary)] transition-colors ${
+      className={`text-left px-3 py-2 font-medium cursor-pointer select-none hover:text-[var(--text-primary)] transition-colors relative group ${
         current === col ? "text-indigo-400" : "text-[var(--text-muted)]"
       }`}
       onClick={() => onClick(col)}
     >
       {label} <span className="text-[10px]">{icon(col)}</span>
+      {tooltip && <HeaderTooltip text={tooltip} />}
     </th>
+  );
+}
+
+function ThWithTooltip({ label, tooltip, className = "" }: { label: string; tooltip?: string; className?: string }) {
+  return (
+    <th className={`text-left px-3 py-2 text-[var(--text-muted)] font-medium relative group ${className}`}>
+      {label}
+      {tooltip && <HeaderTooltip text={tooltip} />}
+    </th>
+  );
+}
+
+function HeaderTooltip({ text }: { text: string }) {
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2.5 py-1.5 text-[10px] font-normal leading-tight text-[var(--text-primary)] bg-[var(--bg-tertiary)] border border-[var(--border)] rounded shadow-lg whitespace-normal w-52 z-50 opacity-0 group-hover:opacity-100 transition-opacity delay-[1500ms] pointer-events-none">
+      {text}
+    </div>
   );
 }
 
