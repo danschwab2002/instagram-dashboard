@@ -829,25 +829,7 @@ function PostModal({ post, onClose }: { post: Post; onClose: () => void }) {
     }
   };
 
-  const analysisFields = analysis ? [
-    { label: "Hook", items: [
-      { key: "Texto", value: analysis.hook_text },
-      { key: "Tipo", value: analysis.hook_type },
-      { key: "Score", value: analysis.hook_score != null ? `${analysis.hook_score}/10` : null },
-    ]},
-    { label: "Contenido", items: [
-      { key: "Ángulo", value: analysis.content_angle },
-      { key: "Tema", value: analysis.content_topic },
-      { key: "Formato", value: analysis.content_format },
-    ]},
-    { label: "Visual", items: [
-      { key: "Estilo", value: analysis.visual_style },
-    ]},
-    { label: "Análisis", items: [
-      { key: "Por qué funciona", value: analysis.why_it_works },
-      { key: "Cómo replicar", value: analysis.replication_notes },
-    ]},
-  ] : [];
+  const a = analysis; // shorthand
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
@@ -896,33 +878,104 @@ function PostModal({ post, onClose }: { post: Post; onClose: () => void }) {
             <div className="mt-3">
               {analysisLoading ? (
                 <p className="text-xs text-[var(--text-muted)]">Cargando análisis...</p>
-              ) : !analysis ? (
+              ) : !a ? (
                 <p className="text-xs text-[var(--text-muted)]">Este post aún no fue analizado con IA.</p>
               ) : (
-                <div className="space-y-3">
-                  {analysisFields.map(section => {
-                    const visibleItems = section.items.filter(i => i.value != null && i.value !== "");
-                    if (visibleItems.length === 0) return null;
-                    return (
-                      <div key={section.label}>
-                        <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1 font-semibold">{section.label}</p>
-                        <div className="space-y-1">
-                          {visibleItems.map(item => (
-                            <div key={item.key} className="flex gap-2">
-                              <span className="text-xs text-[var(--text-muted)] shrink-0 w-28">{item.key}:</span>
-                              <span className="text-xs text-[var(--text-secondary)]">{item.value}</span>
-                            </div>
-                          ))}
+                <div className="space-y-4">
+                  {/* Opening */}
+                  {a.opening && (
+                    <AnalysisSection title="Apertura" items={[
+                      { label: "Qué se ve", value: a.opening.what_you_see },
+                      { label: "Qué se dice", value: a.opening.what_is_said },
+                      { label: "Texto en pantalla", value: a.opening.text_on_screen },
+                      { label: "Cómo arranca", value: a.opening.how_it_starts },
+                    ]} />
+                  )}
+                  {/* Narrative */}
+                  {a.narrative && (
+                    <AnalysisSection title="Narrativa" items={[
+                      { label: "Historia completa", value: a.narrative.full_story },
+                      { label: "Contenido hablado", value: a.narrative.spoken_content },
+                      { label: "Textos en pantalla", value: a.narrative.text_on_screen_all },
+                      { label: "Cierre", value: a.narrative.ending },
+                    ]}>
+                      {a.narrative.structure_segments && (
+                        <div className="mt-2">
+                          <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Segmentos</p>
+                          <div className="space-y-1.5">
+                            {(Array.isArray(a.narrative.structure_segments) ? a.narrative.structure_segments : []).map((seg: { duration_approx?: string; what_ocurrs_narratively?: string; what_you_see?: string }, i: number) => (
+                              <div key={i} className="bg-[var(--bg-tertiary)] rounded px-2.5 py-1.5 text-xs">
+                                <span className="text-indigo-400 font-mono">{seg.duration_approx}</span>
+                                <p className="text-[var(--text-secondary)] mt-0.5">{seg.what_ocurrs_narratively || seg.what_you_see}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      )}
+                    </AnalysisSection>
+                  )}
+                  {/* Format */}
+                  {a.format && (
+                    <AnalysisSection title="Formato" items={[
+                      { label: "Estilo de grabación", value: a.format.recording_style },
+                      { label: "Escenario", value: a.format.setting },
+                      { label: "Persona en cámara", value: a.format.person_on_camera },
+                      { label: "Cambios de escena", value: a.format.scene_changes },
+                      { label: "Textos superpuestos", value: a.format.text_overlays },
+                      { label: "Ritmo de edición", value: a.format.editing_rhythm },
+                    ]} />
+                  )}
+                  {/* Audio */}
+                  {a.audio && (
+                    <AnalysisSection title="Audio" items={[
+                      { label: "Voz", value: a.audio.voice },
+                      { label: "Música", value: a.audio.music },
+                      { label: "Efectos", value: a.audio.sound_effects },
+                    ]} />
+                  )}
+                  {/* Metadata */}
+                  {a.metadata && (
+                    <div className="flex gap-2 flex-wrap">
+                      {a.metadata.language && <span className="px-2 py-0.5 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-muted)]">{a.metadata.language.toUpperCase()}</span>}
+                      {a.metadata.category && <span className="px-2 py-0.5 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-muted)]">{a.metadata.category}</span>}
+                      {a.metadata.production_level && <span className={`px-2 py-0.5 text-[10px] rounded border ${
+                        a.metadata.production_level === "high" ? "border-green-500/30 text-green-400 bg-green-500/10" :
+                        a.metadata.production_level === "medium" ? "border-yellow-500/30 text-yellow-400 bg-yellow-500/10" :
+                        "border-[var(--border)] text-[var(--text-muted)] bg-[var(--bg-tertiary)]"
+                      }`}>Producción: {a.metadata.production_level}</span>}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AnalysisSection({ title, items, children }: {
+  title: string;
+  items: { label: string; value: string | string[] | null | undefined }[];
+  children?: React.ReactNode;
+}) {
+  const visible = items.filter(i => i.value && i.value !== "not provided");
+  if (visible.length === 0 && !children) return null;
+  return (
+    <div>
+      <p className="text-[10px] uppercase text-indigo-400/70 font-semibold mb-2 tracking-wider">{title}</p>
+      <div className="space-y-2">
+        {visible.map(item => (
+          <div key={item.label}>
+            <p className="text-[10px] text-[var(--text-muted)] mb-0.5">{item.label}</p>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              {Array.isArray(item.value) ? item.value.join(", ") : item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      {children}
     </div>
   );
 }

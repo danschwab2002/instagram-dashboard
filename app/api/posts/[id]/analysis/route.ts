@@ -19,7 +19,7 @@ export async function GET(
   const { id } = await params;
 
   const result = await pool.query(
-    `SELECT * FROM post_analyses WHERE post_id = $1 LIMIT 1`,
+    `SELECT description, model_used, created_at FROM post_descriptions WHERE post_id = $1 ORDER BY created_at DESC LIMIT 1`,
     [id]
   );
 
@@ -27,5 +27,9 @@ export async function GET(
     return NextResponse.json({ analysis: null });
   }
 
-  return NextResponse.json({ analysis: result.rows[0] });
+  return NextResponse.json({
+    analysis: result.rows[0].description,
+    model: result.rows[0].model_used,
+    analyzed_at: result.rows[0].created_at,
+  });
 }
