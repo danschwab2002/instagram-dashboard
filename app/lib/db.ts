@@ -68,6 +68,8 @@ export interface PostFilters {
   durationMax?: number;
   dateFrom?: string;
   dateTo?: string;
+  scrapedFrom?: string;
+  scrapedTo?: string;
   sortBy?: string;
   sortDir?: string;
   limit?: number;
@@ -131,7 +133,7 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
     researchId, accountIds, ownerEmail, type, captionSearch, hashtag,
     viewsMin, viewsMax, likesMin, likesMax, commentsMin, commentsMax,
     engagementMin, engagementMax, scoreMin, scoreMax,
-    durationMin, durationMax, dateFrom, dateTo,
+    durationMin, durationMax, dateFrom, dateTo, scrapedFrom, scrapedTo,
     sortBy = "performance_score", sortDir = "DESC",
     limit = 100, offset = 0,
   } = params;
@@ -213,9 +215,13 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
   if (durationMin != null) { conditions.push(`p.video_duration >= $${paramIdx++}`); values.push(durationMin); }
   if (durationMax != null) { conditions.push(`p.video_duration <= $${paramIdx++}`); values.push(durationMax); }
 
-  // Date range
+  // Date range (posted)
   if (dateFrom) { conditions.push(`p.posted_at >= $${paramIdx++}`); values.push(dateFrom); }
   if (dateTo) { conditions.push(`p.posted_at <= $${paramIdx++}`); values.push(dateTo + "T23:59:59Z"); }
+
+  // Date range (scraped)
+  if (scrapedFrom) { conditions.push(`p.scraped_at >= $${paramIdx++}`); values.push(scrapedFrom); }
+  if (scrapedTo) { conditions.push(`p.scraped_at <= $${paramIdx++}`); values.push(scrapedTo + "T23:59:59Z"); }
 
   const ownerJoin = needsOwnerJoin
     ? `JOIN research_accounts owner_ra ON owner_ra.account_id = p.account_id
@@ -270,7 +276,7 @@ function buildFilterClauses(params: PostFilters) {
     researchId, accountIds, ownerEmail, type, captionSearch, hashtag,
     viewsMin, viewsMax, likesMin, likesMax, commentsMin, commentsMax,
     engagementMin, engagementMax, scoreMin, scoreMax,
-    durationMin, durationMax, dateFrom, dateTo,
+    durationMin, durationMax, dateFrom, dateTo, scrapedFrom, scrapedTo,
   } = params;
 
   const conditions: string[] = [];
@@ -316,6 +322,8 @@ function buildFilterClauses(params: PostFilters) {
   if (durationMax != null) { conditions.push(`p.video_duration <= $${paramIdx++}`); values.push(durationMax); }
   if (dateFrom) { conditions.push(`p.posted_at >= $${paramIdx++}`); values.push(dateFrom); }
   if (dateTo) { conditions.push(`p.posted_at <= $${paramIdx++}`); values.push(dateTo + "T23:59:59Z"); }
+  if (scrapedFrom) { conditions.push(`p.scraped_at >= $${paramIdx++}`); values.push(scrapedFrom); }
+  if (scrapedTo) { conditions.push(`p.scraped_at <= $${paramIdx++}`); values.push(scrapedTo + "T23:59:59Z"); }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   return { conditions, values, paramIdx, joinClause, ownerJoin, where };

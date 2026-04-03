@@ -138,6 +138,7 @@ export function Dashboard({
     if (filters.scoreMin != null || filters.scoreMax != null) count++;
     if (filters.durationMin != null || filters.durationMax != null) count++;
     if (filters.dateFrom || filters.dateTo) count++;
+    if (filters.scrapedFrom || filters.scrapedTo) count++;
     return count;
   }, [filters]);
 
@@ -248,7 +249,8 @@ export function Dashboard({
     { key: "engagement", label: "Eng. Rate", type: "range", keyMin: "engMin", keyMax: "engMax", placeholder: ["Min %", "Max %"] },
     { key: "score", label: "Score", type: "range", keyMin: "scoreMin", keyMax: "scoreMax", placeholder: ["Min", "Max"] },
     { key: "duration", label: "Duración (s)", type: "range", keyMin: "durMin", keyMax: "durMax", placeholder: ["Min seg", "Max seg"] },
-    { key: "date", label: "Fecha", type: "daterange", keyFrom: "dateFrom", keyTo: "dateTo" },
+    { key: "date", label: "Fecha publicación", type: "daterange", keyFrom: "dateFrom", keyTo: "dateTo" },
+    { key: "scraped", label: "Fecha scrapeado", type: "daterange", keyFrom: "scrapedFrom", keyTo: "scrapedTo" },
     { key: "caption", label: "Caption", type: "text", paramKey: "caption", placeholder: "Buscar en caption..." },
     { key: "hashtag", label: "Hashtag", type: "text", paramKey: "hashtag", placeholder: "Ej: ai, claudecode..." },
   ];

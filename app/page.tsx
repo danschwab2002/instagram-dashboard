@@ -45,6 +45,8 @@ export default async function Home({
     durationMax: parseNum(params.durMax),
     dateFrom: params.dateFrom,
     dateTo: params.dateTo,
+    scrapedFrom: params.scrapedFrom,
+    scrapedTo: params.scrapedTo,
     sortBy: params.sort || "performance_score",
     sortDir: params.dir || "DESC",
     limit: 100,

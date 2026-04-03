@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
     durationMax: parseNum(sp.get("durMax")),
     dateFrom: sp.get("dateFrom") || undefined,
     dateTo: sp.get("dateTo") || undefined,
+    scrapedFrom: sp.get("scrapedFrom") || undefined,
+    scrapedTo: sp.get("scrapedTo") || undefined,
     sortBy: sp.get("sort") || "performance_score",
     sortDir: sp.get("dir") || "DESC",
     limit: 10000,
