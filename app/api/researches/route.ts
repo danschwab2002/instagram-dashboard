@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
             usernames,
             days_back: daysBack,
             apify_api_key: apifyApiKey,
+            user_id: user.id,
           }),
         });
         // Actualizar estado a scraping
