@@ -118,6 +118,7 @@ export function Dashboard({
   const searchParams = useSearchParams();
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [analyzingIds, setAnalyzingIds] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
@@ -355,8 +356,35 @@ export function Dashboard({
           {selectedIds.size > 0 && (
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs text-indigo-400">{selectedIds.size} seleccionados</span>
-              <button className="px-2.5 py-1 text-xs rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors">
-                Analizar con IA
+              <button
+                onClick={async () => {
+                  if (analyzingIds) return;
+                  setAnalyzingIds(true);
+                  try {
+                    const res = await fetch("/api/posts/analyze", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ postIds: Array.from(selectedIds) }),
+                    });
+                    if (res.ok) {
+                      setSelectedIds(new Set());
+                      router.refresh();
+                    } else {
+                      const data = await res.json();
+                      alert(data.error || "Error al iniciar análisis");
+                    }
+                  } finally {
+                    setAnalyzingIds(false);
+                  }
+                }}
+                disabled={analyzingIds}
+                className={`px-2.5 py-1 text-xs rounded text-white transition-colors ${
+                  analyzingIds
+                    ? "bg-indigo-500/50 cursor-not-allowed"
+                    : "bg-indigo-500 hover:bg-indigo-600"
+                }`}
+              >
+                {analyzingIds ? "Enviando..." : "Analizar con IA"}
               </button>
             </div>
           )}
