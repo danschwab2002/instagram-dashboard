@@ -393,7 +393,7 @@ export function Dashboard({
         {/* Table */}
         <div className="flex-1 overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-[var(--bg-tertiary)] border-b border-[var(--border)]">
+            <thead className="sticky top-0 z-10 bg-[var(--bg-tertiary)] border-b border-[var(--border)]" style={{ overflow: "visible" }}>
               <tr>
                 <th className="px-3 py-2 w-8">
                   {selectingAll ? (
@@ -938,10 +938,30 @@ function ThWithTooltip({ label, tooltip, className = "" }: { label: string; tool
 }
 
 function HeaderTooltip({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const show = () => {
+    timerRef.current = setTimeout(() => setVisible(true), 1500);
+  };
+  const hide = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setVisible(false);
+  };
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
   return (
-    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2.5 py-1.5 text-[10px] font-normal leading-tight text-[var(--text-primary)] bg-[var(--bg-tertiary)] border border-[var(--border)] rounded shadow-lg whitespace-normal w-52 z-50 opacity-0 group-hover:opacity-100 transition-opacity delay-[1500ms] pointer-events-none">
-      {text}
-    </div>
+    <>
+      <span
+        className="absolute inset-0 z-20"
+        onMouseEnter={show}
+        onMouseLeave={hide}
+      />
+      {visible && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 px-2.5 py-1.5 text-[10px] font-normal leading-tight text-[var(--text-primary)] bg-[#1a1a2e] border border-[var(--border)] rounded shadow-lg whitespace-normal w-52 z-[100] pointer-events-none">
+          {text}
+        </div>
+      )}
+    </>
   );
 }
 
