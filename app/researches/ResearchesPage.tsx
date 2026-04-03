@@ -32,11 +32,6 @@ function parseUsernames(input: string): string[] {
     .split(/[\n,]+/)
     .map((line) => {
       let cleaned = line.trim();
-      // Extraer username de URLs de Instagram
-      const urlMatch = cleaned.match(
-        /(?:https?:\/\/)?(?:www\.)?instagram\.com\/([a-zA-Z0-9_.]+)/
-      );
-      if (urlMatch) return urlMatch[1];
       // Quitar @ si lo tiene
       if (cleaned.startsWith("@")) cleaned = cleaned.slice(1);
       // Validar que sea un username válido
@@ -203,7 +198,7 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
                   <textarea
                     value={accountsInput}
                     onChange={(e) => setAccountsInput(e.target.value)}
-                    placeholder={"Pegá URLs o usernames, uno por línea:\nhttps://instagram.com/kylewhitrow\n@daniel.blort\nlaz.fran"}
+                    placeholder={"Pegá usernames, uno por línea:\nkylewhitrow\n@daniel.blort\nlaz.fran"}
                     rows={6}
                     className="w-full px-3 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500 font-mono"
                   />
