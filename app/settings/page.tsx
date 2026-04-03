@@ -17,7 +17,7 @@ export default async function Page() {
   const user = await requireUser();
 
   const result = await pool.query(
-    `SELECT apify_api_key FROM user_profiles WHERE user_id = $1`,
+    `SELECT apify_api_key, gemini_api_key FROM user_profiles WHERE user_id = $1`,
     [user.id]
   );
 
@@ -25,6 +25,7 @@ export default async function Page() {
     <SettingsPage
       userEmail={user.email || ""}
       apifyApiKey={result.rows[0]?.apify_api_key || ""}
+      geminiApiKey={result.rows[0]?.gemini_api_key || ""}
     />
   );
 }

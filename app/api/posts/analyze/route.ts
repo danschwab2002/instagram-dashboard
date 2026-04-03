@@ -20,6 +20,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "postIds requerido" }, { status: 400 });
   }
 
+  // Obtener Gemini API key del usuario
+  const profileResult = await pool.query(
+    `SELECT gemini_api_key FROM user_profiles WHERE user_id = $1`,
+    [user.id]
+  );
+  const geminiApiKey = profileResult.rows[0]?.gemini_api_key || null;
+
   // Marcar posts como "analyzing"
   const placeholders = postIds.map((_, i) => `$${i + 1}`).join(",");
   await pool.query(
@@ -37,7 +44,7 @@ export async function POST(request: NextRequest) {
     await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_ids: postIds }),
+      body: JSON.stringify({ post_ids: postIds, gemini_api_key: geminiApiKey }),
     });
   } catch {
     // Revertir status si el webhook falla

@@ -5,16 +5,20 @@ import { useState } from "react";
 
 export function SettingsPage({
   userEmail,
-  apifyApiKey: initialKey,
+  apifyApiKey: initialApifyKey,
+  geminiApiKey: initialGeminiKey,
 }: {
   userEmail: string;
   apifyApiKey: string;
+  geminiApiKey: string;
 }) {
-  const [apifyApiKey, setApifyApiKey] = useState(initialKey);
+  const [apifyApiKey, setApifyApiKey] = useState(initialApifyKey);
+  const [geminiApiKey, setGeminiApiKey] = useState(initialGeminiKey);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -25,7 +29,10 @@ export function SettingsPage({
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apify_api_key: apifyApiKey.trim() || null }),
+        body: JSON.stringify({
+          apify_api_key: apifyApiKey.trim() || null,
+          gemini_api_key: geminiApiKey.trim() || null,
+        }),
       });
       if (!res.ok) throw new Error("Error guardando configuración");
       setSaved(true);
@@ -103,16 +110,47 @@ export function SettingsPage({
                     {showKey ? "Ocultar" : "Mostrar"}
                   </button>
                 </div>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-50 shrink-0"
-                >
-                  {saving ? "Guardando..." : "Guardar"}
-                </button>
               </div>
-              {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
-              {saved && <p className="text-xs text-green-400 mt-2">Guardado correctamente</p>}
+            </div>
+
+            {/* Gemini API Key */}
+            <div className="p-4 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]">
+              <h3 className="text-sm font-semibold mb-1">API Key de Gemini</h3>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                Tu API key de Google Gemini. Se usa para el análisis profundo de videos con IA.
+                La encontrás en aistudio.google.com → API Keys.
+              </p>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    type={showGeminiKey ? "text" : "password"}
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full px-3 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500 font-mono pr-16"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                  >
+                    {showGeminiKey ? "Ocultar" : "Mostrar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Save button */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
+              >
+                {saving ? "Guardando..." : "Guardar configuración"}
+              </button>
+              {error && <p className="text-xs text-red-400">{error}</p>}
+              {saved && <p className="text-xs text-green-400">Guardado correctamente</p>}
             </div>
           </div>
         </div>
