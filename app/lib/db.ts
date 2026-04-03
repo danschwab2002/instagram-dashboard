@@ -120,9 +120,9 @@ export async function getAccounts(researchId?: number): Promise<Account[]> {
 export async function getOwners(): Promise<string[]> {
   const result = await pool.query(`
     SELECT DISTINCT u.email
-    FROM researches r
-    JOIN auth.users u ON u.id = r.user_id
-    WHERE r.user_id IS NOT NULL
+    FROM posts p
+    JOIN auth.users u ON u.id = p.scraped_by
+    WHERE p.scraped_by IS NOT NULL
     ORDER BY u.email
   `);
   return result.rows.map((r: { email: string }) => r.email);
@@ -156,7 +156,7 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
   const values: (string | number)[] = [];
   let paramIdx = 1;
   let joinClause = "";
-  let needsOwnerJoin = false;
+  // needsOwnerJoin removed — owner now uses p.scraped_by directly
 
   // Research filter
   if (researchId) {
@@ -174,8 +174,7 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
 
   // Owner filter
   if (ownerEmail) {
-    needsOwnerJoin = true;
-    conditions.push(`owner_u.email = $${paramIdx++}`);
+    conditions.push(`EXISTS (SELECT 1 FROM auth.users ou WHERE ou.id = p.scraped_by AND ou.email = $${paramIdx++})`);
     values.push(ownerEmail);
   }
 
@@ -223,18 +222,12 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
   if (scrapedFrom) { conditions.push(`p.scraped_at >= $${paramIdx++}`); values.push(scrapedFrom); }
   if (scrapedTo) { conditions.push(`p.scraped_at <= $${paramIdx++}`); values.push(scrapedTo + "T23:59:59Z"); }
 
-  const ownerJoin = needsOwnerJoin
-    ? `JOIN research_accounts owner_ra ON owner_ra.account_id = p.account_id
-       JOIN researches owner_r ON owner_r.id = owner_ra.research_id
-       JOIN auth.users owner_u ON owner_u.id = owner_r.user_id`
-    : "";
-
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const countResult = await pool.query(
     `SELECT COUNT(DISTINCT p.id) FROM posts p
      LEFT JOIN accounts a ON a.id = p.account_id
-     ${joinClause} ${ownerJoin} ${where}`,
+     ${joinClause} ${where}`,
     values
   );
   const total = parseInt(countResult.rows[0].count, 10);
@@ -253,15 +246,10 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
         (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
         ARRAY[]::TEXT[]
       ) as hashtags,
-      (SELECT u.email FROM researches r
-       JOIN research_accounts ra2 ON ra2.research_id = r.id
-       JOIN auth.users u ON u.id = r.user_id
-       WHERE ra2.account_id = p.account_id
-       ORDER BY r.created_at ASC LIMIT 1
-      ) as owner_email
+      (SELECT u.email FROM auth.users u WHERE u.id = p.scraped_by) as owner_email
     FROM posts p
     LEFT JOIN accounts a ON a.id = p.account_id
-    ${joinClause} ${ownerJoin}
+    ${joinClause}
     ${where}
     ORDER BY ${orderCol} ${dir} NULLS LAST, p.id
     LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -283,8 +271,6 @@ function buildFilterClauses(params: PostFilters) {
   const values: (string | number)[] = [];
   let paramIdx = 1;
   let joinClause = "";
-  let ownerJoin = "";
-
   if (researchId) {
     joinClause = `JOIN research_accounts ra ON ra.account_id = p.account_id`;
     conditions.push(`ra.research_id = $${paramIdx++}`);
@@ -296,10 +282,7 @@ function buildFilterClauses(params: PostFilters) {
     values.push(...accountIds);
   }
   if (ownerEmail) {
-    ownerJoin = `JOIN research_accounts owner_ra ON owner_ra.account_id = p.account_id
-       JOIN researches owner_r ON owner_r.id = owner_ra.research_id
-       JOIN auth.users owner_u ON owner_u.id = owner_r.user_id`;
-    conditions.push(`owner_u.email = $${paramIdx++}`);
+    conditions.push(`EXISTS (SELECT 1 FROM auth.users ou WHERE ou.id = p.scraped_by AND ou.email = $${paramIdx++})`);
     values.push(ownerEmail);
   }
   if (type && type !== "all") { conditions.push(`p.type = $${paramIdx++}`); values.push(type); }
@@ -326,7 +309,7 @@ function buildFilterClauses(params: PostFilters) {
   if (scrapedTo) { conditions.push(`p.scraped_at <= $${paramIdx++}`); values.push(scrapedTo + "T23:59:59Z"); }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  return { conditions, values, paramIdx, joinClause, ownerJoin, where };
+  return { conditions, values, paramIdx, joinClause, where };
 }
 
 export interface Stats {
@@ -348,7 +331,7 @@ export interface Stats {
 }
 
 export async function getStats(filters: PostFilters = {}): Promise<Stats> {
-  const { values, joinClause, ownerJoin, where } = buildFilterClauses(filters);
+  const { values, joinClause, where } = buildFilterClauses(filters);
 
   const result = await pool.query(
     `SELECT
@@ -369,7 +352,7 @@ export async function getStats(filters: PostFilters = {}): Promise<Stats> {
       MAX(p.comments_count) as max_comments
     FROM posts p
     LEFT JOIN accounts a ON a.id = p.account_id
-    ${joinClause} ${ownerJoin} ${where}`,
+    ${joinClause} ${where}`,
     values
   );
 
