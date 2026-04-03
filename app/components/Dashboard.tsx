@@ -527,6 +527,18 @@ function FilterControl({
   searchParams: ReturnType<typeof useSearchParams>;
   updateParams: (updates: Record<string, string | undefined>) => void;
 }) {
+  // Multiselect hooks (must be before any conditional returns)
+  const [msOpen, setMsOpen] = useState(false);
+  const [msSearch, setMsSearch] = useState("");
+  const msRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (msRef.current && !msRef.current.contains(e.target as Node)) setMsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   if (def.type === "select") {
     const current = searchParams.get(def.key) || "";
     return (
@@ -551,26 +563,73 @@ function FilterControl({
       else next.add(val);
       updateParams({ [def.key]: next.size > 0 ? Array.from(next).join(",") : undefined });
     };
+    const filtered = def.options.filter(o => o.label.toLowerCase().includes(msSearch.toLowerCase()));
     return (
-      <div className="col-span-2">
+      <div className="relative" ref={msRef}>
         <label className="block text-[10px] uppercase text-[var(--text-muted)] mb-1">
           {def.label}{current.size > 0 && ` (${current.size})`}
         </label>
-        <div className="flex flex-wrap gap-1">
-          {def.options.map(o => (
-            <button
-              key={o.value}
-              onClick={() => toggle(o.value)}
-              className={`px-2 py-1 text-[11px] rounded border transition-colors ${
-                current.has(o.value)
-                  ? "border-indigo-500/50 bg-indigo-500/15 text-indigo-400"
-                  : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={() => setMsOpen(!msOpen)}
+          className="w-full px-2 py-1.5 text-[11px] rounded border border-[var(--border)] bg-[var(--bg-secondary)] text-left text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between"
+        >
+          <span className="truncate">
+            {current.size === 0
+              ? `Seleccionar ${def.label.toLowerCase()}...`
+              : `${current.size} seleccionado${current.size > 1 ? "s" : ""}`}
+          </span>
+          <svg className={`w-3 h-3 ml-1 transition-transform ${msOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {msOpen && (
+          <div className="absolute z-50 mt-1 w-full min-w-[200px] rounded border border-[var(--border)] bg-[var(--bg-secondary)] shadow-lg">
+            <div className="p-1.5 border-b border-[var(--border)]">
+              <input
+                type="text"
+                placeholder="Buscar..."
+                value={msSearch}
+                onChange={e => setMsSearch(e.target.value)}
+                className="w-full px-2 py-1 text-[11px] rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-indigo-500/50"
+              />
+            </div>
+            <div className="max-h-[200px] overflow-y-auto">
+              {filtered.length === 0 && (
+                <div className="px-2 py-2 text-[11px] text-[var(--text-muted)] text-center">Sin resultados</div>
+              )}
+              {filtered.map(o => (
+                <button
+                  key={o.value}
+                  onClick={() => toggle(o.value)}
+                  className="w-full px-2 py-1.5 text-[11px] text-left flex items-center gap-2 hover:bg-[var(--bg-hover)] transition-colors"
+                >
+                  <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${
+                    current.has(o.value)
+                      ? "border-indigo-500 bg-indigo-500/20"
+                      : "border-[var(--border)]"
+                  }`}>
+                    {current.has(o.value) && (
+                      <svg className="w-2.5 h-2.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className={current.has(o.value) ? "text-indigo-400" : "text-[var(--text-muted)]"}>{o.label}</span>
+                </button>
+              ))}
+            </div>
+            {current.size > 0 && (
+              <div className="p-1.5 border-t border-[var(--border)]">
+                <button
+                  onClick={() => updateParams({ [def.key]: undefined })}
+                  className="w-full px-2 py-1 text-[10px] text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                >
+                  Limpiar selección
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
