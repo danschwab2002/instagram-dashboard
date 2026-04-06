@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
         message: message.trim(),
         dataset_id: session.dataset_id,
         phase: currentPhase,
+        agent_type: session.agent_type,
         api_key: apiKey,
         provider,
       }),
