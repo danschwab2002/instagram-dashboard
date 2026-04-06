@@ -568,3 +568,150 @@ export async function getDatasetsForUser(userId: string): Promise<{ id: number; 
   `, [userId]);
   return result.rows;
 }
+
+// ── AI Sessions ─────────────────────────────────────────
+
+export interface AiSession {
+  id: number;
+  user_id: string;
+  name: string;
+  agent_type: string;
+  dataset_id: number;
+  tags: string[];
+  status: string;
+  phase: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiSessionListItem extends AiSession {
+  dataset_name: string;
+  message_count: number;
+}
+
+export interface AiMessage {
+  id: number;
+  session_id: number;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export async function getAiSessions(userId: string): Promise<AiSessionListItem[]> {
+  const result = await pool.query(`
+    SELECT
+      s.*,
+      d.name as dataset_name,
+      (SELECT COUNT(*)::int FROM ai_messages m WHERE m.session_id = s.id AND m.role != 'system') as message_count
+    FROM ai_sessions s
+    JOIN datasets d ON d.id = s.dataset_id
+    WHERE s.user_id = $1
+    ORDER BY s.updated_at DESC
+  `, [userId]);
+  return result.rows;
+}
+
+export async function getAiSession(sessionId: number, userId: string): Promise<AiSession | null> {
+  const result = await pool.query(
+    `SELECT * FROM ai_sessions WHERE id = $1 AND user_id = $2`,
+    [sessionId, userId]
+  );
+  return result.rows[0] || null;
+}
+
+export async function getAiMessages(sessionId: number): Promise<AiMessage[]> {
+  const result = await pool.query(
+    `SELECT * FROM ai_messages WHERE session_id = $1 ORDER BY created_at ASC`,
+    [sessionId]
+  );
+  return result.rows;
+}
+
+export async function addAiMessage(sessionId: number, role: string, content: string): Promise<AiMessage> {
+  const result = await pool.query(
+    `INSERT INTO ai_messages (session_id, role, content) VALUES ($1, $2, $3) RETURNING *`,
+    [sessionId, role, content]
+  );
+  // Update session's updated_at
+  await pool.query(`UPDATE ai_sessions SET updated_at = NOW() WHERE id = $1`, [sessionId]);
+  return result.rows[0];
+}
+
+export async function getDatasetMetadataForAgent(datasetId: number) {
+  const [dsRes, creatorsRes] = await Promise.all([
+    pool.query(`SELECT * FROM datasets WHERE id = $1`, [datasetId]),
+    pool.query(`
+      SELECT DISTINCT a.username, a.followers_count
+      FROM dataset_posts dp
+      JOIN posts p ON p.id = dp.post_id
+      JOIN accounts a ON a.id = p.account_id
+      WHERE dp.dataset_id = $1
+      ORDER BY a.followers_count DESC
+    `, [datasetId]),
+  ]);
+
+  if (dsRes.rows.length === 0) return null;
+  const ds = dsRes.rows[0];
+
+  return {
+    name: ds.name,
+    description: ds.description,
+    context: ds.context,
+    niche: ds.niche,
+    objective: ds.objective,
+    tags: ds.tags || [],
+    keywords: ds.keywords || [],
+    total_posts: ds.total_posts || 0,
+    total_creators: ds.total_creators || 0,
+    metrics: {
+      views: { median: ds.median_views, min: ds.min_views, max: ds.max_views },
+      likes: { median: ds.median_likes, min: ds.min_likes, max: ds.max_likes },
+      comments: { median: ds.median_comments, min: ds.min_comments, max: ds.max_comments },
+      engagement: { median: ds.median_engagement, min: ds.min_engagement, max: ds.max_engagement },
+      duration: { median: ds.median_duration, min: ds.min_duration, max: ds.max_duration },
+    },
+    creators: creatorsRes.rows.map((r: { username: string; followers_count: number }) => ({
+      username: r.username,
+      followers: r.followers_count,
+    })),
+  };
+}
+
+export async function getDatasetFullContent(datasetId: number) {
+  const result = await pool.query(`
+    SELECT
+      p.id, p.short_code, p.caption, p.type, p.product_type,
+      p.likes_count, p.comments_count, p.shares_count,
+      p.video_view_count, p.video_duration,
+      p.engagement_rate, p.performance_score,
+      p.posted_at,
+      COALESCE(a.username, 'desconocido') as username,
+      COALESCE(a.followers_count, 0) as creator_followers,
+      COALESCE(
+        (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
+        ARRAY[]::TEXT[]
+      ) as hashtags,
+      pd.description as ai_analysis
+    FROM dataset_posts dp
+    JOIN posts p ON p.id = dp.post_id
+    LEFT JOIN accounts a ON a.id = p.account_id
+    LEFT JOIN LATERAL (
+      SELECT description FROM post_descriptions WHERE post_id = p.id ORDER BY created_at DESC LIMIT 1
+    ) pd ON true
+    WHERE dp.dataset_id = $1
+    ORDER BY p.performance_score DESC NULLS LAST
+    LIMIT 75
+  `, [datasetId]);
+
+  return result.rows.map((r: Record<string, unknown>) => {
+    let analysis = null;
+    if (r.ai_analysis) {
+      try {
+        analysis = typeof r.ai_analysis === "string" ? JSON.parse(r.ai_analysis as string) : r.ai_analysis;
+      } catch {
+        analysis = r.ai_analysis;
+      }
+    }
+    return { ...r, ai_analysis: analysis };
+  });
+}

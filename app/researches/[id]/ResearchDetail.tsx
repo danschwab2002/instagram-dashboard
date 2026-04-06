@@ -121,6 +121,12 @@ export function ResearchDetail({
             Datasets
           </Link>
           <Link
+            href="/ai"
+            className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+          >
+            AI Analysis
+          </Link>
+          <Link
             href="/settings"
             className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
           >
