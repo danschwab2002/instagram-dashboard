@@ -1,4 +1,4 @@
-import { getAccounts, getPosts, getStats, getResearches, getOwners, PostFilters } from "./lib/db";
+import { getAccounts, getPosts, getStats, getResearches, getOwners, getDatasetsForUser, PostFilters } from "./lib/db";
 import { requireUser } from "./lib/auth";
 import { Dashboard } from "./components/Dashboard";
 
@@ -55,12 +55,13 @@ export default async function Home({
 
   const page = parseInt(params.page || "1");
 
-  const [accounts, { posts, total }, stats, researches, owners] = await Promise.all([
+  const [accounts, { posts, total }, stats, researches, owners, datasets] = await Promise.all([
     getAccounts(filters.researchId),
     getPosts(filters),
     getStats(filters),
     getResearches(user.id),
     getOwners(),
+    getDatasetsForUser(user.id),
   ]);
 
   return (
@@ -74,6 +75,7 @@ export default async function Home({
       filters={filters}
       researches={researches}
       owners={owners}
+      datasets={datasets}
       userEmail={user.email}
     />
   );

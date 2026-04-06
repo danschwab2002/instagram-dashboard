@@ -375,3 +375,196 @@ export async function getStats(filters: PostFilters = {}): Promise<Stats> {
     maxComments: r.max_comments || 0,
   };
 }
+
+// ── Datasets ────────────────────────────────────────────
+
+export interface DatasetMetrics {
+  total_posts: number;
+  total_creators: number;
+  median_views: number | null;
+  min_views: number | null;
+  max_views: number | null;
+  median_likes: number | null;
+  min_likes: number | null;
+  max_likes: number | null;
+  median_comments: number | null;
+  min_comments: number | null;
+  max_comments: number | null;
+  median_engagement: number | null;
+  min_engagement: number | null;
+  max_engagement: number | null;
+  median_duration: number | null;
+  min_duration: number | null;
+  max_duration: number | null;
+}
+
+export interface Dataset {
+  id: number;
+  name: string;
+  description: string | null;
+  context: string | null;
+  niche: string | null;
+  objective: string | null;
+  tags: string[];
+  keywords: string[];
+  additional_notes: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  posts_count: number;
+  creators_count: number;
+  metrics: DatasetMetrics;
+}
+
+export interface DatasetDetail extends Dataset {
+  creators: string[];
+  researches: { id: number; name: string }[];
+  scraped_range: { min: string | null; max: string | null };
+}
+
+export interface DatasetPost extends Post {
+  dataset_note: string | null;
+  added_at: string;
+}
+
+function rowToDataset(r: Record<string, unknown>): Dataset {
+  return {
+    id: r.id as number,
+    name: r.name as string,
+    description: r.description as string | null,
+    context: r.context as string | null,
+    niche: r.niche as string | null,
+    objective: r.objective as string | null,
+    tags: (r.tags as string[]) || [],
+    keywords: (r.keywords as string[]) || [],
+    additional_notes: r.additional_notes as string | null,
+    status: r.status as string,
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
+    posts_count: (r.total_posts as number) || 0,
+    creators_count: (r.total_creators as number) || 0,
+    metrics: {
+      total_posts: (r.total_posts as number) || 0,
+      total_creators: (r.total_creators as number) || 0,
+      median_views: r.median_views as number | null,
+      min_views: r.min_views as number | null,
+      max_views: r.max_views as number | null,
+      median_likes: r.median_likes as number | null,
+      min_likes: r.min_likes as number | null,
+      max_likes: r.max_likes as number | null,
+      median_comments: r.median_comments as number | null,
+      min_comments: r.min_comments as number | null,
+      max_comments: r.max_comments as number | null,
+      median_engagement: r.median_engagement as number | null,
+      min_engagement: r.min_engagement as number | null,
+      max_engagement: r.max_engagement as number | null,
+      median_duration: r.median_duration as number | null,
+      min_duration: r.min_duration as number | null,
+      max_duration: r.max_duration as number | null,
+    },
+  };
+}
+
+export async function getDatasets(userId: string): Promise<Dataset[]> {
+  const result = await pool.query(`
+    SELECT *
+    FROM datasets
+    WHERE user_id = $1
+    ORDER BY updated_at DESC
+  `, [userId]);
+  return result.rows.map(rowToDataset);
+}
+
+export async function getDataset(datasetId: number, userId: string): Promise<DatasetDetail | null> {
+  const result = await pool.query(`
+    SELECT * FROM datasets WHERE id = $1 AND user_id = $2
+  `, [datasetId, userId]);
+
+  if (result.rows.length === 0) return null;
+  const dataset = rowToDataset(result.rows[0]);
+
+  // Fetch derived fields in parallel
+  const [creatorsRes, researchesRes, scrapedRes] = await Promise.all([
+    pool.query(`
+      SELECT DISTINCT a.username
+      FROM dataset_posts dp
+      JOIN posts p ON p.id = dp.post_id
+      JOIN accounts a ON a.id = p.account_id
+      WHERE dp.dataset_id = $1
+      ORDER BY a.username
+    `, [datasetId]),
+    pool.query(`
+      SELECT DISTINCT r.id, r.name
+      FROM dataset_posts dp
+      JOIN posts p ON p.id = dp.post_id
+      JOIN research_accounts ra ON ra.account_id = p.account_id
+      JOIN researches r ON r.id = ra.research_id
+      WHERE dp.dataset_id = $1
+      ORDER BY r.name
+    `, [datasetId]),
+    pool.query(`
+      SELECT MIN(p.scraped_at) as min, MAX(p.scraped_at) as max
+      FROM dataset_posts dp
+      JOIN posts p ON p.id = dp.post_id
+      WHERE dp.dataset_id = $1
+    `, [datasetId]),
+  ]);
+
+  return {
+    ...dataset,
+    creators: creatorsRes.rows.map((r: { username: string }) => r.username),
+    researches: researchesRes.rows,
+    scraped_range: scrapedRes.rows[0] || { min: null, max: null },
+  };
+}
+
+export async function getDatasetPosts(datasetId: number, sortBy = "added_at", sortDir = "DESC"): Promise<DatasetPost[]> {
+  const allowedSorts: Record<string, string> = {
+    added_at: "dp.added_at",
+    performance_score: "p.performance_score",
+    engagement_rate: "p.engagement_rate",
+    likes_count: "p.likes_count",
+    video_view_count: "p.video_view_count",
+    posted_at: "p.posted_at",
+  };
+  const orderCol = allowedSorts[sortBy] || "dp.added_at";
+  const dir = sortDir === "ASC" ? "ASC" : "DESC";
+
+  const result = await pool.query(`
+    SELECT
+      p.id, p.short_code, COALESCE(a.username, 'desconocido') as username,
+      COALESCE(a.account_type, 'competitor') as account_type,
+      COALESCE(a.followers_count, 0) as followers_count,
+      p.type, p.caption, p.likes_count, p.comments_count, p.shares_count,
+      p.video_view_count, p.video_play_count, p.video_duration,
+      p.engagement_rate, p.performance_score, p.posted_at, p.url,
+      p.display_url, p.stored_url, p.product_type,
+      p.scraped_at, p.analysis_status,
+      COALESCE(
+        (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
+        ARRAY[]::TEXT[]
+      ) as hashtags,
+      (SELECT u.email FROM auth.users u WHERE u.id = p.scraped_by) as owner_email,
+      dp.note as dataset_note,
+      dp.added_at
+    FROM dataset_posts dp
+    JOIN posts p ON p.id = dp.post_id
+    LEFT JOIN accounts a ON a.id = p.account_id
+    WHERE dp.dataset_id = $1
+    ORDER BY ${orderCol} ${dir} NULLS LAST, p.id
+  `, [datasetId]);
+
+  return result.rows;
+}
+
+export async function getDatasetsForUser(userId: string): Promise<{ id: number; name: string; posts_count: number }[]> {
+  const result = await pool.query(`
+    SELECT d.id, d.name, COUNT(dp.post_id)::int as posts_count
+    FROM datasets d
+    LEFT JOIN dataset_posts dp ON dp.dataset_id = d.id
+    WHERE d.user_id = $1 AND d.status != 'archived'
+    GROUP BY d.id
+    ORDER BY d.updated_at DESC
+  `, [userId]);
+  return result.rows;
+}

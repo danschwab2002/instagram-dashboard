@@ -98,6 +98,12 @@ const colTooltip = (key: string) => ALL_COLUMNS.find(c => c.key === key)?.toolti
 
 // ── Main Component ───────────────────────────────────────
 
+interface DatasetOption {
+  id: number;
+  name: string;
+  posts_count: number;
+}
+
 interface DashboardProps {
   accounts: Account[];
   posts: Post[];
@@ -108,17 +114,21 @@ interface DashboardProps {
   filters: PostFilters;
   researches: Research[];
   owners: string[];
+  datasets: DatasetOption[];
   userEmail?: string;
 }
 
 export function Dashboard({
-  accounts, posts, stats, total, currentPage, pageSize, filters, researches, owners, userEmail,
+  accounts, posts, stats, total, currentPage, pageSize, filters, researches, owners, datasets, userEmail,
 }: DashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [analyzingIds, setAnalyzingIds] = useState(false);
+  const [showDatasetDropdown, setShowDatasetDropdown] = useState(false);
+  const [addingToDataset, setAddingToDataset] = useState(false);
+  const datasetDropdownRef = useRef<HTMLDivElement>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
@@ -221,6 +231,41 @@ export function Dashboard({
     setSelectedIds(next);
   };
 
+  // Close dataset dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (datasetDropdownRef.current && !datasetDropdownRef.current.contains(e.target as Node)) {
+        setShowDatasetDropdown(false);
+      }
+    }
+    if (showDatasetDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showDatasetDropdown]);
+
+  const addToDataset = async (datasetId: number) => {
+    if (addingToDataset || selectedIds.size === 0) return;
+    setAddingToDataset(true);
+    try {
+      const res = await fetch(`/api/datasets/${datasetId}/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ post_ids: Array.from(selectedIds) }),
+      });
+      if (res.ok) {
+        setSelectedIds(new Set());
+        setShowDatasetDropdown(false);
+        router.refresh();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Error agregando posts al dataset");
+      }
+    } finally {
+      setAddingToDataset(false);
+    }
+  };
+
   const toggleColumn = (key: string) => {
     const next = new Set(visibleCols);
     if (next.has(key)) next.delete(key);
@@ -269,6 +314,7 @@ export function Dashboard({
         <nav className="p-3 flex flex-col gap-1">
           <Link href="/" className="px-2 py-1.5 rounded text-sm bg-indigo-500/15 text-indigo-400">Dashboard</Link>
           <Link href="/researches" className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">Investigaciones</Link>
+          <Link href="/datasets" className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">Datasets</Link>
           <Link href="/settings" className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">Configuración</Link>
         </nav>
         {userEmail && (
@@ -386,6 +432,51 @@ export function Dashboard({
               >
                 {analyzingIds ? "Enviando..." : "Analizar con IA"}
               </button>
+              {/* Add to dataset button */}
+              <div className="relative" ref={datasetDropdownRef}>
+                <button
+                  onClick={() => setShowDatasetDropdown(!showDatasetDropdown)}
+                  disabled={addingToDataset}
+                  className={`px-2.5 py-1 text-xs rounded text-white transition-colors ${
+                    addingToDataset
+                      ? "bg-purple-500/50 cursor-not-allowed"
+                      : "bg-purple-500 hover:bg-purple-600"
+                  }`}
+                >
+                  {addingToDataset ? "Agregando..." : "Agregar a dataset"}
+                </button>
+                {showDatasetDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-64 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-lg z-50 py-1">
+                    {datasets.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-[var(--text-muted)]">
+                        No hay datasets. <Link href="/datasets" className="text-indigo-400 hover:text-indigo-300">Crear uno</Link>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+                          Seleccionar dataset
+                        </p>
+                        {datasets.map((d) => (
+                          <button
+                            key={d.id}
+                            onClick={() => addToDataset(d.id)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between"
+                          >
+                            <span className="text-[var(--text-primary)] truncate">{d.name}</span>
+                            <span className="text-[10px] text-[var(--text-muted)] shrink-0 ml-2">{d.posts_count} posts</span>
+                          </button>
+                        ))}
+                        <div className="border-t border-[var(--border)] mt-1 pt-1">
+                          <Link href="/datasets" onClick={() => setShowDatasetDropdown(false)}
+                            className="block px-3 py-2 text-xs text-indigo-400 hover:bg-[var(--bg-hover)] transition-colors">
+                            + Nuevo dataset
+                          </Link>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
