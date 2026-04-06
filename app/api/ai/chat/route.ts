@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         session_id,
+        session_key: `${session.agent_type}_${user.id}_${session_id}`,
         message: message.trim(),
         dataset_id: session.dataset_id,
         phase: currentPhase,
@@ -107,8 +108,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Error del agente de IA. Intentá de nuevo." }, { status: 502 });
     }
 
-    const n8nData = await n8nResponse.json();
-    const assistantMessage = n8nData.output || n8nData.response || n8nData.text || JSON.stringify(n8nData);
+    const n8nRaw = await n8nResponse.json();
+    // n8n can return an object or an array of objects
+    const n8nData = Array.isArray(n8nRaw) ? n8nRaw[0] : n8nRaw;
+    const assistantMessage = n8nData?.output || n8nData?.response || n8nData?.text || (typeof n8nData === "string" ? n8nData : JSON.stringify(n8nData));
 
     // Strip briefing marker before saving
     const cleanMessage = assistantMessage.replace(BRIEFING_MARKER, "").trim();
