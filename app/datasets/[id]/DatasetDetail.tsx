@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DatasetDetail as DatasetDetailType, DatasetPost } from "../../lib/db";
 
 function statusBadge(status: string) {
@@ -48,6 +48,22 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}m`;
 }
 
+function engagementColor(rate: number | null): string {
+  if (rate == null) return "text-zinc-500";
+  if (rate >= 0.05) return "text-green-400";
+  if (rate >= 0.03) return "text-emerald-400";
+  if (rate >= 0.01) return "text-yellow-400";
+  return "text-red-400";
+}
+
+function scoreColor(score: number | null): string {
+  if (score == null) return "text-zinc-500";
+  if (score >= 0.7) return "text-green-400 font-semibold";
+  if (score >= 0.4) return "text-yellow-400";
+  if (score >= 0.2) return "text-orange-400";
+  return "text-red-400";
+}
+
 const inputClass = "w-full px-3 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500";
 
 export function DatasetDetail({
@@ -63,6 +79,7 @@ export function DatasetDetail({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<Set<number>>(new Set());
+  const [selectedPost, setSelectedPost] = useState<DatasetPost | null>(null);
 
   // Editable fields
   const [name, setName] = useState(dataset.name);
@@ -339,15 +356,21 @@ export function DatasetDetail({
           <MetricCard label="Likes" median={dataset.metrics.median_likes} min={dataset.metrics.min_likes} max={dataset.metrics.max_likes} />
           <MetricCard label="Engagement" median={dataset.metrics.median_engagement} min={dataset.metrics.min_engagement} max={dataset.metrics.max_engagement} isPercent />
 
-          {selectedPosts.size > 0 && (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-[var(--text-muted)]">{selectedPosts.size} seleccionados</span>
-              <button onClick={handleRemovePosts}
-                className="px-3 py-1.5 text-xs rounded bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
-                Quitar del dataset
-              </button>
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {selectedPosts.size > 0 && (
+              <>
+                <span className="text-xs text-[var(--text-muted)]">{selectedPosts.size} seleccionados</span>
+                <button onClick={handleRemovePosts}
+                  className="px-3 py-1.5 text-xs rounded bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
+                  Quitar del dataset
+                </button>
+              </>
+            )}
+            <Link href={`/?dataset_add=${dataset.id}`}
+              className="px-3 py-1.5 text-xs rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors">
+              + Agregar reels
+            </Link>
+          </div>
         </div>
 
         {/* Posts table */}
@@ -377,16 +400,14 @@ export function DatasetDetail({
               </thead>
               <tbody>
                 {posts.map((p) => (
-                  <tr key={p.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors">
-                    <td className="px-2 py-3 text-center">
+                  <tr key={p.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                    onClick={() => setSelectedPost(p)}>
+                    <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedPosts.has(p.id)}
                         onChange={() => toggleSelect(p.id)} className="accent-indigo-500" />
                     </td>
                     <td className="px-4 py-3 text-[var(--text-primary)]">
-                      <a href={p.url || `https://instagram.com/p/${p.short_code}`} target="_blank" rel="noopener"
-                        className="hover:text-indigo-400 transition-colors">
-                        @{p.username}
-                      </a>
+                      @{p.username}
                     </td>
                     <td className="px-4 py-3 max-w-xs truncate text-[var(--text-secondary)]">
                       {p.caption ? p.caption.slice(0, 80) + (p.caption.length > 80 ? "..." : "") : "\u2014"}
@@ -416,6 +437,11 @@ export function DatasetDetail({
           )}
         </div>
       </main>
+
+      {/* Post Modal */}
+      {selectedPost && (
+        <PostModal post={selectedPost} onClose={() => setSelectedPost(null)} />
+      )}
     </div>
   );
 }
@@ -446,4 +472,199 @@ function MetricCard({ label, median, min, max, isPercent }: {
       </p>
     </div>
   );
+}
+
+// ── Post Modal (with AI analysis) ──────────────────────
+
+function PostModal({ post, onClose }: { post: DatasetPost; onClose: () => void }) {
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisFetched, setAnalysisFetched] = useState(false);
+
+  const loadAnalysis = async () => {
+    if (analysisFetched) {
+      setShowAnalysis(!showAnalysis);
+      return;
+    }
+    setShowAnalysis(true);
+    setAnalysisLoading(true);
+    try {
+      const res = await fetch(`/api/posts/${post.id}/analysis`);
+      if (res.ok) {
+        const data = await res.json();
+        setAnalysis(data.analysis);
+      }
+    } finally {
+      setAnalysisLoading(false);
+      setAnalysisFetched(true);
+    }
+  };
+
+  // Auto-load analysis on open
+  useEffect(() => {
+    loadAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const a = analysis;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+          <div>
+            <p className="text-sm text-[var(--text-secondary)]">@{post.username}</p>
+            <p className="text-xs text-[var(--text-muted)]">{post.type} · {formatDuration(post.video_duration)}</p>
+          </div>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2">×</button>
+        </div>
+        {post.stored_url ? (
+          <div className="bg-black">
+            <video src={post.stored_url} controls autoPlay className="w-full max-h-[60vh] object-contain" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-48 bg-[var(--bg-tertiary)] text-[var(--text-muted)] text-sm">Video no disponible</div>
+        )}
+        <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p><p className="text-sm font-semibold">{formatNumber(post.video_view_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Likes</p><p className="text-sm font-semibold">{formatNumber(post.likes_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Comments</p><p className="text-sm font-semibold">{formatNumber(post.comments_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Shares</p><p className="text-sm font-semibold">{formatNumber(post.shares_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Eng. Rate</p><p className={`text-sm font-semibold ${engagementColor(post.engagement_rate)}`}>{formatPercent(post.engagement_rate)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Score</p><p className={`text-sm font-semibold ${scoreColor(post.performance_score)}`}>{post.performance_score != null ? (post.performance_score * 100).toFixed(1) : "\u2014"}</p></div>
+        </div>
+        {post.caption && (
+          <div className="p-4 border-b border-[var(--border)]">
+            <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Caption</p>
+            <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{post.caption}</p>
+          </div>
+        )}
+
+        {/* AI Analysis section — auto-loaded */}
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setShowAnalysis(!showAnalysis)}
+              className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              <span>{showAnalysis ? "\u25BC" : "\u25B6"}</span>
+              <span>Análisis IA</span>
+            </button>
+            <AiStatusBadge status={post.analysis_status || "pending"} />
+          </div>
+
+          {showAnalysis && (
+            <div className="mt-1">
+              {analysisLoading ? (
+                <p className="text-xs text-[var(--text-muted)]">Cargando análisis...</p>
+              ) : !a ? (
+                <p className="text-xs text-[var(--text-muted)]">Este post aún no fue analizado con IA.</p>
+              ) : (
+                <div className="space-y-4">
+                  {a.opening && (
+                    <AnalysisSection title="Apertura" items={[
+                      { label: "Qué se ve", value: a.opening.what_you_see },
+                      { label: "Qué se dice", value: a.opening.what_is_said },
+                      { label: "Texto en pantalla", value: a.opening.text_on_screen },
+                      { label: "Cómo arranca", value: a.opening.how_it_starts },
+                    ]} />
+                  )}
+                  {a.narrative && (
+                    <AnalysisSection title="Narrativa" items={[
+                      { label: "Historia completa", value: a.narrative.full_story },
+                      { label: "Contenido hablado", value: a.narrative.spoken_content },
+                      { label: "Textos en pantalla", value: a.narrative.text_on_screen_all },
+                      { label: "Cierre", value: a.narrative.ending },
+                    ]}>
+                      {a.narrative.structure_segments && (
+                        <div className="mt-2">
+                          <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Segmentos</p>
+                          <div className="space-y-1.5">
+                            {(Array.isArray(a.narrative.structure_segments) ? a.narrative.structure_segments : []).map((seg: { duration_approx?: string; what_ocurrs_narratively?: string; what_you_see?: string }, i: number) => (
+                              <div key={i} className="bg-[var(--bg-tertiary)] rounded px-2.5 py-1.5 text-xs">
+                                <span className="text-indigo-400 font-mono">{seg.duration_approx}</span>
+                                <p className="text-[var(--text-secondary)] mt-0.5">{seg.what_ocurrs_narratively || seg.what_you_see}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </AnalysisSection>
+                  )}
+                  {a.format && (
+                    <AnalysisSection title="Formato" items={[
+                      { label: "Estilo de grabación", value: a.format.recording_style },
+                      { label: "Escenario", value: a.format.setting },
+                      { label: "Persona en cámara", value: a.format.person_on_camera },
+                      { label: "Cambios de escena", value: a.format.scene_changes },
+                      { label: "Textos superpuestos", value: a.format.text_overlays },
+                      { label: "Ritmo de edición", value: a.format.editing_rhythm },
+                    ]} />
+                  )}
+                  {a.audio && (
+                    <AnalysisSection title="Audio" items={[
+                      { label: "Voz", value: a.audio.voice },
+                      { label: "Música", value: a.audio.music },
+                      { label: "Efectos", value: a.audio.sound_effects },
+                    ]} />
+                  )}
+                  {a.metadata && (
+                    <div className="flex gap-2 flex-wrap">
+                      {a.metadata.language && <span className="px-2 py-0.5 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-muted)]">{a.metadata.language.toUpperCase()}</span>}
+                      {a.metadata.category && <span className="px-2 py-0.5 text-[10px] rounded bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-muted)]">{a.metadata.category}</span>}
+                      {a.metadata.production_level && <span className={`px-2 py-0.5 text-[10px] rounded border ${
+                        a.metadata.production_level === "high" ? "border-green-500/30 text-green-400 bg-green-500/10" :
+                        a.metadata.production_level === "medium" ? "border-yellow-500/30 text-yellow-400 bg-yellow-500/10" :
+                        "border-[var(--border)] text-[var(--text-muted)] bg-[var(--bg-tertiary)]"
+                      }`}>Producción: {a.metadata.production_level}</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalysisSection({ title, items, children }: {
+  title: string;
+  items: { label: string; value: string | string[] | null | undefined }[];
+  children?: React.ReactNode;
+}) {
+  const visible = items.filter(i => i.value && i.value !== "not provided");
+  if (visible.length === 0 && !children) return null;
+  return (
+    <div>
+      <p className="text-[10px] uppercase text-indigo-400/70 font-semibold mb-2 tracking-wider">{title}</p>
+      <div className="space-y-2">
+        {visible.map(item => (
+          <div key={item.label}>
+            <p className="text-[10px] text-[var(--text-muted)] mb-0.5">{item.label}</p>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              {Array.isArray(item.value) ? item.value.join(", ") : item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function AiStatusBadge({ status }: { status: string }) {
+  if (status === "finished" || status === "completed") {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-green-500/15 text-green-400 border-green-500/30">Analizado</span>;
+  }
+  if (status === "analyzing") {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/15 text-yellow-400 border-yellow-500/30">Analizando...</span>;
+  }
+  if (status.startsWith("error")) {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/15 text-red-400 border-red-500/30">Error</span>;
+  }
+  return <span className="text-[10px] text-[var(--text-muted)]">{"\u2014"}</span>;
 }

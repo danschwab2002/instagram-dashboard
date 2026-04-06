@@ -64,6 +64,10 @@ export default async function Home({
     getDatasetsForUser(user.id),
   ]);
 
+  // Find dataset name if in "add to dataset" mode
+  const datasetAddId = parseNum(params.dataset_add);
+  const datasetAddName = datasetAddId ? datasets.find(d => d.id === datasetAddId)?.name : undefined;
+
   return (
     <Dashboard
       accounts={accounts}
@@ -76,6 +80,8 @@ export default async function Home({
       researches={researches}
       owners={owners}
       datasets={datasets}
+      datasetAddId={datasetAddId}
+      datasetAddName={datasetAddName}
       userEmail={user.email}
     />
   );

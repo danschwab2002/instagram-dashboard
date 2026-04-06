@@ -115,11 +115,13 @@ interface DashboardProps {
   researches: Research[];
   owners: string[];
   datasets: DatasetOption[];
+  datasetAddId?: number;
+  datasetAddName?: string;
   userEmail?: string;
 }
 
 export function Dashboard({
-  accounts, posts, stats, total, currentPage, pageSize, filters, researches, owners, datasets, userEmail,
+  accounts, posts, stats, total, currentPage, pageSize, filters, researches, owners, datasets, datasetAddId, datasetAddName, userEmail,
 }: DashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -337,6 +339,28 @@ export function Dashboard({
 
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Dataset add mode banner */}
+        {datasetAddId && datasetAddName && (
+          <div className="flex items-center justify-between px-5 py-2 bg-purple-500/10 border-b border-purple-500/30">
+            <p className="text-xs text-purple-300">
+              Seleccioná reels y agregalos a <span className="font-semibold">{datasetAddName}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => addToDataset(datasetAddId)}
+                  disabled={addingToDataset}
+                  className={`px-3 py-1 text-xs rounded text-white transition-colors ${addingToDataset ? "bg-purple-500/50 cursor-not-allowed" : "bg-purple-500 hover:bg-purple-600"}`}
+                >
+                  {addingToDataset ? "Agregando..." : `Agregar ${selectedIds.size} al dataset`}
+                </button>
+              )}
+              <Link href={`/datasets/${datasetAddId}`} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                Volver al dataset
+              </Link>
+            </div>
+          </div>
+        )}
         {/* Stats bar */}
         <div className="flex items-center gap-4 px-5 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)] overflow-x-auto">
           <StatCard label="Posts" value={formatNumber(stats.totalPosts)} />
