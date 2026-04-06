@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
 import { createClient } from "../../../lib/supabase/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getAgent, formatDatasetMetadata, formatDatasetFullContent } from "../../../lib/agents";
-import { getDatasetMetadataForAgent, getDatasetFullContent } from "../../../lib/db";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -39,16 +36,31 @@ export async function POST(request: NextRequest) {
   }
   const session = sessionRes.rows[0];
 
-  // Check Gemini API key
+  // Get user's AI provider and corresponding API key
   const profileRes = await pool.query(
-    `SELECT gemini_api_key FROM user_profiles WHERE user_id = $1`,
+    `SELECT ai_provider, openai_api_key, gemini_api_key, claude_api_key FROM user_profiles WHERE user_id = $1`,
     [user.id]
   );
-  const geminiApiKey = profileRes.rows[0]?.gemini_api_key;
-  if (!geminiApiKey) {
+  const profile = profileRes.rows[0];
+  const provider = profile?.ai_provider || "openai";
+
+  const keyMap: Record<string, string | null> = {
+    openai: profile?.openai_api_key,
+    gemini: profile?.gemini_api_key,
+    claude: profile?.claude_api_key,
+  };
+  const apiKey = keyMap[provider];
+
+  if (!apiKey) {
     return NextResponse.json({
-      error: "Necesitás configurar tu API Key de Gemini en Configuración para usar AI Analysis.",
+      error: `Necesitás configurar tu API Key de ${provider === "openai" ? "OpenAI" : provider === "gemini" ? "Gemini" : "Claude"} en Configuración.`,
     }, { status: 400 });
+  }
+
+  // Check webhook URL
+  const webhookUrl = process.env.N8N_AI_CHAT_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return NextResponse.json({ error: "Webhook de AI no configurado" }, { status: 500 });
   }
 
   // Save user message
@@ -56,170 +68,65 @@ export async function POST(request: NextRequest) {
     `INSERT INTO ai_messages (session_id, role, content) VALUES ($1, 'user', $2)`,
     [session_id, message.trim()]
   );
-  await pool.query(`UPDATE ai_sessions SET updated_at = NOW() WHERE id = $1`, [session_id]);
 
-  // Load full message history
-  const historyRes = await pool.query(
-    `SELECT role, content FROM ai_messages WHERE session_id = $1 ORDER BY created_at ASC`,
-    [session_id]
-  );
-  const allMessages = historyRes.rows;
-
-  // ── Phase transition detection ──
-  const agent = getAgent(session.agent_type);
-  if (!agent) {
-    return NextResponse.json({ error: "Agente no válido" }, { status: 400 });
-  }
-
-  let systemInstruction = "";
-  const chatHistory: { role: "user" | "model"; parts: { text: string }[] }[] = [];
-  let phaseTransitioned = false;
-
-  // Check if briefing just completed (last assistant message had the marker)
-  if (session.phase === "briefing") {
-    const lastAssistant = [...allMessages].reverse().find(m => m.role === "assistant");
-    if (lastAssistant && lastAssistant.content.includes(BRIEFING_MARKER)) {
-      // Transition to analysis phase
-      phaseTransitioned = true;
+  // Detect phase transition: if last assistant message had BRIEFING_COMPLETE marker
+  let currentPhase = session.phase;
+  if (currentPhase === "briefing") {
+    const lastAssistantRes = await pool.query(
+      `SELECT content FROM ai_messages WHERE session_id = $1 AND role = 'assistant' ORDER BY created_at DESC LIMIT 1`,
+      [session_id]
+    );
+    if (lastAssistantRes.rows[0]?.content?.includes(BRIEFING_MARKER)) {
+      currentPhase = "analysis";
       await pool.query(
         `UPDATE ai_sessions SET phase = 'analysis', updated_at = NOW() WHERE id = $1`,
         [session_id]
       );
-
-      // Load full dataset content
-      const fullContent = await getDatasetFullContent(session.dataset_id);
-      const metadata = await getDatasetMetadataForAgent(session.dataset_id);
-      const dataContext = formatDatasetFullContent(fullContent);
-      const metadataContext = formatDatasetMetadata(metadata);
-
-      // Save data injection as system message
-      await pool.query(
-        `INSERT INTO ai_messages (session_id, role, content) VALUES ($1, 'system', $2)`,
-        [session_id, `[Datos del dataset cargados: ${fullContent.length} posts]`]
-      );
-
-      // Build system instruction with analysis prompt + full data
-      systemInstruction = `${agent.analysisPrompt}\n\n${metadataContext}\n\n${dataContext}`;
     }
   }
 
-  // Build system instruction if not already set by phase transition
-  if (!systemInstruction) {
-    // Use the first system message as the system instruction
-    const systemMessages = allMessages.filter(m => m.role === "system");
-    if (systemMessages.length > 0) {
-      systemInstruction = systemMessages[0].content;
+  // Call n8n webhook
+  try {
+    const n8nResponse = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id,
+        message: message.trim(),
+        dataset_id: session.dataset_id,
+        phase: currentPhase,
+        api_key: apiKey,
+        provider,
+      }),
+    });
+
+    if (!n8nResponse.ok) {
+      const errText = await n8nResponse.text();
+      console.error("n8n webhook error:", errText);
+      return NextResponse.json({ error: "Error del agente de IA. Intentá de nuevo." }, { status: 502 });
     }
 
-    // If in analysis phase (previously transitioned), rebuild with full data
-    if (session.phase === "analysis" && !phaseTransitioned) {
-      const fullContent = await getDatasetFullContent(session.dataset_id);
-      const metadata = await getDatasetMetadataForAgent(session.dataset_id);
-      systemInstruction = `${agent.analysisPrompt}\n\n${formatDatasetMetadata(metadata)}\n\n${formatDatasetFullContent(fullContent)}`;
-    }
+    const n8nData = await n8nResponse.json();
+    const assistantMessage = n8nData.output || n8nData.response || n8nData.text || JSON.stringify(n8nData);
+
+    // Strip briefing marker before saving
+    const cleanMessage = assistantMessage.replace(BRIEFING_MARKER, "").trim();
+    const briefingComplete = assistantMessage.includes(BRIEFING_MARKER);
+
+    // Save assistant message
+    await pool.query(
+      `INSERT INTO ai_messages (session_id, role, content) VALUES ($1, 'assistant', $2)`,
+      [session_id, cleanMessage]
+    );
+    await pool.query(`UPDATE ai_sessions SET updated_at = NOW() WHERE id = $1`, [session_id]);
+
+    return NextResponse.json({
+      message: cleanMessage,
+      briefing_complete: briefingComplete,
+      phase: briefingComplete ? "analysis" : currentPhase,
+    });
+  } catch (error) {
+    console.error("Error calling n8n webhook:", error);
+    return NextResponse.json({ error: "Error de conexión con el agente de IA." }, { status: 502 });
   }
-
-  // Build chat history (exclude system messages)
-  const nonSystemMessages = allMessages.filter(m => m.role !== "system");
-  for (const msg of nonSystemMessages) {
-    const role = msg.role === "assistant" ? "model" : "user";
-    // Clean briefing marker from history
-    const content = msg.content.replace(BRIEFING_MARKER, "").trim();
-    if (!content) continue;
-
-    // Merge consecutive same-role messages
-    const last = chatHistory[chatHistory.length - 1];
-    if (last && last.role === role) {
-      last.parts[0].text += "\n\n" + content;
-    } else {
-      chatHistory.push({ role, parts: [{ text: content }] });
-    }
-  }
-
-  // ── Gemini streaming call ──
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      let fullResponse = "";
-
-      try {
-        const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({
-          model: "gemini-1.5-flash",
-          systemInstruction: systemInstruction || undefined,
-        });
-
-        const chat = model.startChat({
-          history: chatHistory.slice(0, -1), // all except last user message
-        });
-
-        // Last user message is the one we just saved
-        const lastUserMsg = chatHistory[chatHistory.length - 1];
-        const userText = lastUserMsg?.parts[0]?.text || message.trim();
-
-        const result = await chat.sendMessageStream(userText);
-
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) {
-            fullResponse += text;
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-          }
-        }
-
-        // Strip briefing marker before saving
-        let cleanResponse = fullResponse;
-        if (fullResponse.includes(BRIEFING_MARKER)) {
-          cleanResponse = fullResponse.replace(BRIEFING_MARKER, "").trim();
-        }
-
-        // Save assistant message
-        await pool.query(
-          `INSERT INTO ai_messages (session_id, role, content) VALUES ($1, 'assistant', $2)`,
-          [session_id, cleanResponse]
-        );
-        await pool.query(`UPDATE ai_sessions SET updated_at = NOW() WHERE id = $1`, [session_id]);
-
-        // If this response contained the briefing marker, notify client
-        const briefingComplete = fullResponse.includes(BRIEFING_MARKER);
-
-        controller.enqueue(encoder.encode(
-          `data: ${JSON.stringify({ done: true, briefing_complete: briefingComplete })}\n\n`
-        ));
-        controller.close();
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : "Error desconocido";
-        let userFriendly = "Error generando respuesta. Intentá de nuevo.";
-
-        if (errMsg.includes("API_KEY_INVALID") || errMsg.includes("401")) {
-          userFriendly = "Tu API key de Gemini es inválida. Revisala en Configuración.";
-        } else if (errMsg.includes("429") || errMsg.includes("RATE_LIMIT")) {
-          userFriendly = "Demasiadas solicitudes. Esperá un momento y volvé a intentar.";
-        }
-
-        console.error("Gemini streaming error:", errMsg);
-
-        // Save partial response if any
-        if (fullResponse) {
-          await pool.query(
-            `INSERT INTO ai_messages (session_id, role, content) VALUES ($1, 'assistant', $2)`,
-            [session_id, fullResponse + "\n\n[Error: respuesta incompleta]"]
-          );
-        }
-
-        controller.enqueue(encoder.encode(
-          `data: ${JSON.stringify({ error: userFriendly })}\n\n`
-        ));
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
 }

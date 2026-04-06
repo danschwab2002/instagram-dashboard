@@ -46,8 +46,7 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
   const [sessionDetail, setSessionDetail] = useState<{ session: AiSessionListItem; messages: AiMessage[] } | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [inputText, setInputText] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "in_progress" | "completed">("all");
@@ -80,18 +79,18 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingText]);
+  }, [messages]);
 
   // Auto-focus input
   useEffect(() => {
-    if (selectedSessionId && !isStreaming) {
+    if (selectedSessionId && !isSending) {
       inputRef.current?.focus();
     }
-  }, [selectedSessionId, isStreaming]);
+  }, [selectedSessionId, isSending]);
 
   // If session is new (0 visible messages), trigger first assistant message
   useEffect(() => {
-    if (sessionDetail && messages.length === 0 && !isStreaming) {
+    if (sessionDetail && messages.length === 0 && !isSending) {
       sendMessage("Hola, estoy listo para empezar.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,11 +99,10 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
   // ── Send message ──
   async function sendMessage(text?: string) {
     const msg = text || inputText.trim();
-    if (!msg || isStreaming || !selectedSessionId) return;
+    if (!msg || isSending || !selectedSessionId) return;
 
     setInputText("");
-    setIsStreaming(true);
-    setStreamingText("");
+    setIsSending(true);
 
     // Optimistically add user message (unless it's the auto-trigger)
     if (!text) {
@@ -118,64 +116,26 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
         body: JSON.stringify({ session_id: selectedSessionId, message: msg }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
         setMessages(prev => [...prev, { id: Date.now(), session_id: selectedSessionId, role: "assistant", content: `Error: ${data.error}`, created_at: new Date().toISOString() }]);
-        setIsStreaming(false);
         return;
       }
 
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let assistantText = "";
+      // Add assistant message
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        session_id: selectedSessionId,
+        role: "assistant",
+        content: data.message,
+        created_at: new Date().toISOString(),
+      }]);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter(l => l.startsWith("data: "));
-
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.done) {
-              // Phase transition happened
-              if (data.briefing_complete) {
-                // Reload session to get updated phase
-                await loadSession(selectedSessionId);
-              }
-              break;
-            }
-            if (data.error) {
-              assistantText += `\n\n⚠️ ${data.error}`;
-              setStreamingText(assistantText);
-              break;
-            }
-            if (data.text) {
-              assistantText += data.text;
-              setStreamingText(assistantText);
-            }
-          } catch {
-            // Skip malformed JSON
-          }
-        }
+      // Phase transition happened
+      if (data.briefing_complete) {
+        await loadSession(selectedSessionId);
       }
-
-      // Add final assistant message
-      if (assistantText) {
-        // Strip briefing marker from display
-        const cleanText = assistantText.replace("[BRIEFING_COMPLETE]", "").trim();
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          session_id: selectedSessionId,
-          role: "assistant",
-          content: cleanText,
-          created_at: new Date().toISOString(),
-        }]);
-      }
-
-      setStreamingText("");
 
       // Update session in list (move to top)
       setSessions(prev => {
@@ -195,7 +155,7 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
         created_at: new Date().toISOString(),
       }]);
     } finally {
-      setIsStreaming(false);
+      setIsSending(false);
     }
   }
 
@@ -349,11 +309,16 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
                 {messages.map(msg => (
                   <MessageBubble key={msg.id} message={msg} />
                 ))}
-                {streamingText && (
-                  <MessageBubble
-                    message={{ id: -1, session_id: selectedSessionId!, role: "assistant", content: streamingText, created_at: "" }}
-                    isStreaming
-                  />
+                {isSending && (
+                  <div className="flex justify-start">
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" />
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" style={{ animationDelay: "0.2s" }} />
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }} />
+                      </div>
+                    </div>
+                  </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -366,14 +331,14 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={isStreaming ? "Esperando respuesta..." : "Escribí tu mensaje..."}
-                    disabled={isStreaming}
+                    placeholder={isSending ? "Esperando respuesta..." : "Escribí tu mensaje..."}
+                    disabled={isSending}
                     rows={1}
                     className="flex-1 px-3 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
                   />
                   <button
                     onClick={() => sendMessage()}
-                    disabled={isStreaming || !inputText.trim()}
+                    disabled={isSending || !inputText.trim()}
                     className="px-4 py-2 text-sm rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                   >
                     Enviar
@@ -415,7 +380,7 @@ export function AiAnalysisPage({ initialSessions, datasets, hasGeminiKey }: Prop
 
 // ── Message Bubble ───────────────────────────────────
 
-function MessageBubble({ message, isStreaming }: { message: AiMessage; isStreaming?: boolean }) {
+function MessageBubble({ message }: { message: AiMessage }) {
   const isUser = message.role === "user";
 
   return (
@@ -427,7 +392,6 @@ function MessageBubble({ message, isStreaming }: { message: AiMessage; isStreami
       }`}>
         <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
           {message.content}
-          {isStreaming && <span className="inline-block w-1.5 h-4 ml-0.5 bg-indigo-400 animate-pulse" />}
         </p>
       </div>
     </div>
