@@ -80,6 +80,7 @@ export function DatasetDetail({
   const [saving, setSaving] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<Set<number>>(new Set());
   const [selectedPost, setSelectedPost] = useState<DatasetPost | null>(null);
+  const [analyzingIds, setAnalyzingIds] = useState(false);
 
   // Editable fields
   const [name, setName] = useState(dataset.name);
@@ -144,6 +145,27 @@ export function DatasetDetail({
     if (res.ok) {
       setSelectedPosts(new Set());
       router.refresh();
+    }
+  }
+
+  async function handleAnalyze() {
+    if (analyzingIds || selectedPosts.size === 0) return;
+    setAnalyzingIds(true);
+    try {
+      const res = await fetch("/api/posts/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postIds: Array.from(selectedPosts) }),
+      });
+      if (res.ok) {
+        setSelectedPosts(new Set());
+        router.refresh();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Error al iniciar análisis");
+      }
+    } finally {
+      setAnalyzingIds(false);
     }
   }
 
@@ -364,6 +386,13 @@ export function DatasetDetail({
             {selectedPosts.size > 0 && (
               <>
                 <span className="text-xs text-[var(--text-muted)]">{selectedPosts.size} seleccionados</span>
+                <button
+                  onClick={handleAnalyze}
+                  disabled={analyzingIds}
+                  className={`px-3 py-1.5 text-xs rounded text-white transition-colors ${analyzingIds ? "bg-indigo-500/50 cursor-not-allowed" : "bg-indigo-500 hover:bg-indigo-600"}`}
+                >
+                  {analyzingIds ? "Enviando..." : "Analizar con IA"}
+                </button>
                 <button onClick={handleRemovePosts}
                   className="px-3 py-1.5 text-xs rounded bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
                   Quitar del dataset
@@ -399,6 +428,7 @@ export function DatasetDetail({
                   <th className="text-right px-4 py-2 text-[var(--text-muted)] font-medium">Eng.</th>
                   <th className="text-right px-4 py-2 text-[var(--text-muted)] font-medium">Duración</th>
                   <th className="text-left px-4 py-2 text-[var(--text-muted)] font-medium">Publicado</th>
+                  <th className="text-center px-4 py-2 text-[var(--text-muted)] font-medium">IA</th>
                   <th className="text-left px-4 py-2 text-[var(--text-muted)] font-medium">Nota</th>
                 </tr>
               </thead>
@@ -430,6 +460,9 @@ export function DatasetDetail({
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--text-muted)]">
                       {p.posted_at ? timeAgo(p.posted_at) : "\u2014"}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <AiStatusBadge status={p.analysis_status || "pending"} />
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--text-muted)] max-w-[120px] truncate">
                       {p.dataset_note || "\u2014"}
