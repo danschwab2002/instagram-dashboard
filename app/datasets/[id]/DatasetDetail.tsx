@@ -325,6 +325,10 @@ export function DatasetDetail({
                   className="text-xs text-indigo-400/60 hover:text-indigo-400 transition-colors">
                   Editar
                 </button>
+                <a href={`/api/datasets/${dataset.id}`} download
+                  className="text-xs text-indigo-400/60 hover:text-indigo-400 transition-colors">
+                  Descargar JSON
+                </a>
                 {!confirmDelete ? (
                   <button onClick={() => setConfirmDelete(true)}
                     className="text-xs text-red-400/60 hover:text-red-400 transition-colors">
