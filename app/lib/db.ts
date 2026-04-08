@@ -752,7 +752,7 @@ export interface IgPulseStats {
 export async function getIgConnection(userId: string): Promise<IgConnection | null> {
   const result = await pool.query(
     `SELECT id, ig_account_id, ig_username, ig_name, ig_profile_picture_url,
-            ig_followers_count, ig_following_count, ig_media_count,
+            ig_followers_count, ig_media_count,
             ig_biography, ig_website, ig_account_type, is_active,
             connected_at, last_synced_at
      FROM ig_connections
