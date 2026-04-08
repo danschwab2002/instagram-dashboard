@@ -207,6 +207,11 @@ export function ResearchesPage({ researches }: { researches: Research[] }) {
                       Scrapear posts de los últimos {daysBack} días
                     </span>
                   </div>
+                  {daysBack < 30 && (
+                    <div className="mt-2 px-3 py-2 rounded border border-yellow-500/30 bg-yellow-500/10 text-xs text-yellow-400">
+                      Reducir los dias de scraping puede disminuir la confianza de los Outlier Scores. Con menos posts scrapeados, el promedio del creador es menos representativo y los scores son menos confiables. Se recomiendan al menos 30 dias.
+                    </div>
+                  )}
                 </div>
 
                 <div>

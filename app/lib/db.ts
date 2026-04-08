@@ -39,6 +39,10 @@ export interface Post {
   owner_email: string | null;
   scraped_at: string | null;
   analysis_status: string | null;
+  outlier_views: number | null;
+  outlier_engagement: number | null;
+  outlier_confidence: string | null;
+  outlier_confidence_score: number | null;
 }
 
 export interface Research {
@@ -70,6 +74,11 @@ export interface PostFilters {
   dateTo?: string;
   scrapedFrom?: string;
   scrapedTo?: string;
+  outlierViewsMin?: number;
+  outlierViewsMax?: number;
+  outlierEngMin?: number;
+  outlierEngMax?: number;
+  outlierConfidence?: string;
   sortBy?: string;
   sortDir?: string;
   limit?: number;
@@ -134,6 +143,7 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
     viewsMin, viewsMax, likesMin, likesMax, commentsMin, commentsMax,
     engagementMin, engagementMax, scoreMin, scoreMax,
     durationMin, durationMax, dateFrom, dateTo, scrapedFrom, scrapedTo,
+    outlierViewsMin, outlierViewsMax, outlierEngMin, outlierEngMax, outlierConfidence,
     sortBy = "performance_score", sortDir = "DESC",
     limit = 100, offset = 0,
   } = params;
@@ -147,6 +157,8 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
     video_view_count: "p.video_view_count",
     video_duration: "p.video_duration",
     posted_at: "p.posted_at",
+    outlier_views: "p.outlier_views",
+    outlier_engagement: "p.outlier_engagement",
   };
 
   const orderCol = allowedSorts[sortBy] || "p.performance_score";
@@ -214,6 +226,13 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
   if (durationMin != null) { conditions.push(`p.video_duration >= $${paramIdx++}`); values.push(durationMin); }
   if (durationMax != null) { conditions.push(`p.video_duration <= $${paramIdx++}`); values.push(durationMax); }
 
+  // Outlier filters
+  if (outlierViewsMin != null) { conditions.push(`p.outlier_views >= $${paramIdx++}`); values.push(outlierViewsMin); }
+  if (outlierViewsMax != null) { conditions.push(`p.outlier_views <= $${paramIdx++}`); values.push(outlierViewsMax); }
+  if (outlierEngMin != null) { conditions.push(`p.outlier_engagement >= $${paramIdx++}`); values.push(outlierEngMin); }
+  if (outlierEngMax != null) { conditions.push(`p.outlier_engagement <= $${paramIdx++}`); values.push(outlierEngMax); }
+  if (outlierConfidence && outlierConfidence !== "all") { conditions.push(`p.outlier_confidence = $${paramIdx++}`); values.push(outlierConfidence); }
+
   // Date range (posted)
   if (dateFrom) { conditions.push(`p.posted_at >= $${paramIdx++}`); values.push(dateFrom); }
   if (dateTo) { conditions.push(`p.posted_at <= $${paramIdx++}`); values.push(dateTo + "T23:59:59Z"); }
@@ -242,6 +261,7 @@ export async function getPosts(params: PostFilters): Promise<{ posts: Post[]; to
       p.engagement_rate, p.performance_score, p.posted_at, p.url,
       p.display_url, p.stored_url, p.product_type,
       p.scraped_at, p.analysis_status,
+      p.outlier_views, p.outlier_engagement, p.outlier_confidence, p.outlier_confidence_score,
       COALESCE(
         (SELECT array_agg(h.tag) FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id WHERE ph.post_id = p.id),
         ARRAY[]::TEXT[]
@@ -265,6 +285,7 @@ function buildFilterClauses(params: PostFilters) {
     viewsMin, viewsMax, likesMin, likesMax, commentsMin, commentsMax,
     engagementMin, engagementMax, scoreMin, scoreMax,
     durationMin, durationMax, dateFrom, dateTo, scrapedFrom, scrapedTo,
+    outlierViewsMin, outlierViewsMax, outlierEngMin, outlierEngMax, outlierConfidence,
   } = params;
 
   const conditions: string[] = [];
@@ -307,6 +328,11 @@ function buildFilterClauses(params: PostFilters) {
   if (dateTo) { conditions.push(`p.posted_at <= $${paramIdx++}`); values.push(dateTo + "T23:59:59Z"); }
   if (scrapedFrom) { conditions.push(`p.scraped_at >= $${paramIdx++}`); values.push(scrapedFrom); }
   if (scrapedTo) { conditions.push(`p.scraped_at <= $${paramIdx++}`); values.push(scrapedTo + "T23:59:59Z"); }
+  if (outlierViewsMin != null) { conditions.push(`p.outlier_views >= $${paramIdx++}`); values.push(outlierViewsMin); }
+  if (outlierViewsMax != null) { conditions.push(`p.outlier_views <= $${paramIdx++}`); values.push(outlierViewsMax); }
+  if (outlierEngMin != null) { conditions.push(`p.outlier_engagement >= $${paramIdx++}`); values.push(outlierEngMin); }
+  if (outlierEngMax != null) { conditions.push(`p.outlier_engagement <= $${paramIdx++}`); values.push(outlierEngMax); }
+  if (outlierConfidence && outlierConfidence !== "all") { conditions.push(`p.outlier_confidence = $${paramIdx++}`); values.push(outlierConfidence); }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   return { conditions, values, paramIdx, joinClause, where };

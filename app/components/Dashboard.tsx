@@ -65,6 +65,42 @@ function typeLabel(type: string): { text: string; color: string } {
   }
 }
 
+function outlierColor(score: number | null): string {
+  if (score == null) return "text-zinc-500";
+  if (score >= 30) return "text-green-400 font-semibold";
+  if (score >= 20) return "text-emerald-400";
+  if (score >= 10) return "text-yellow-400";
+  if (score >= 5) return "text-orange-400";
+  return "text-red-400";
+}
+
+function confidenceDot(confidence: string | null): string {
+  switch (confidence) {
+    case "high": return "bg-green-400";
+    case "medium": return "bg-yellow-400";
+    case "low": return "bg-red-400";
+    default: return "bg-zinc-500";
+  }
+}
+
+function confidenceLabel(confidence: string | null): string {
+  switch (confidence) {
+    case "high": return "Alta";
+    case "medium": return "Media";
+    case "low": return "Baja";
+    default: return "—";
+  }
+}
+
+function confidenceBadge(confidence: string | null): string {
+  switch (confidence) {
+    case "high": return "bg-green-500/15 text-green-400 border-green-500/30";
+    case "medium": return "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
+    case "low": return "bg-red-500/15 text-red-400 border-red-500/30";
+    default: return "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+  }
+}
+
 // ── Filter definitions ───────────────────────────────────
 
 type FilterDef =
@@ -92,6 +128,9 @@ const ALL_COLUMNS = [
   { key: "date", label: "Fecha", default: true, sortKey: "posted_at", tooltip: "Fecha en que se publicó el contenido en Instagram" },
   { key: "scraped_at", label: "Scrapeado", default: false, tooltip: "Fecha en que se recolectó este post via scraping" },
   { key: "ai_status", label: "IA", default: true, tooltip: "Estado del análisis con IA: pendiente, analizando, completado o error" },
+  { key: "outlier_views", label: "OV", default: true, sortKey: "outlier_views", tooltip: "Outlier de Views: mide cuánto se desvían las views de este reel respecto al promedio histórico del creador, ponderado logarítmicamente por el volumen base del creador. Fórmula: (views_del_post / promedio_views_del_creador) × LN(promedio_views_del_creador + 1). Un valor de ~10 es promedio, >20 es bueno, >30 es excepcional" },
+  { key: "outlier_engagement", label: "OE", default: true, sortKey: "outlier_engagement", tooltip: "Outlier de Engagement: mide cuánto se desvía el engagement rate de este reel respecto al promedio histórico del creador, ponderado logarítmicamente por el volumen base del creador. Fórmula: (engagement_del_post / promedio_engagement_del_creador) × LN(promedio_views_del_creador + 1). Un valor de ~10 es promedio, >20 es bueno, >30 es excepcional" },
+  { key: "outlier_confidence", label: "Conf.", default: false, tooltip: "Confianza del Outlier Score: basada en la cantidad de posts scrapeados del creador. Alta (>=30 posts), Media (10-29 posts), Baja (<10 posts). Más posts scrapeados = promedio más confiable = outlier score más representativo" },
 ];
 
 const colTooltip = (key: string) => ALL_COLUMNS.find(c => c.key === key)?.tooltip || "";
@@ -154,6 +193,9 @@ export function Dashboard({
     if (filters.durationMin != null || filters.durationMax != null) count++;
     if (filters.dateFrom || filters.dateTo) count++;
     if (filters.scrapedFrom || filters.scrapedTo) count++;
+    if (filters.outlierViewsMin != null || filters.outlierViewsMax != null) count++;
+    if (filters.outlierEngMin != null || filters.outlierEngMax != null) count++;
+    if (filters.outlierConfidence && filters.outlierConfidence !== "all") count++;
     return count;
   }, [filters]);
 
@@ -303,6 +345,12 @@ export function Dashboard({
     { key: "scraped", label: "Fecha scrapeado", type: "daterange", keyFrom: "scrapedFrom", keyTo: "scrapedTo" },
     { key: "caption", label: "Caption", type: "text", paramKey: "caption", placeholder: "Buscar en caption..." },
     { key: "hashtag", label: "Hashtag", type: "text", paramKey: "hashtag", placeholder: "Ej: ai, claudecode..." },
+    { key: "outlierViews", label: "Outlier Views", type: "range", keyMin: "ovMin", keyMax: "ovMax", placeholder: ["Min", "Max"] },
+    { key: "outlierEng", label: "Outlier Engagement", type: "range", keyMin: "oeMin", keyMax: "oeMax", placeholder: ["Min", "Max"] },
+    {
+      key: "outlierConfidence", label: "Confianza Outlier", type: "select",
+      options: [{ value: "all", label: "Todas" }, { value: "high", label: "Alta (>=30 posts)" }, { value: "medium", label: "Media (10-29 posts)" }, { value: "low", label: "Baja (<10 posts)" }],
+    },
   ];
 
   return (
@@ -631,6 +679,33 @@ export function Dashboard({
                     {visibleCols.has("ai_status") && (
                       <td className="px-3 py-2.5">
                         <AiStatusBadge status={post.analysis_status || "pending"} />
+                      </td>
+                    )}
+                    {visibleCols.has("outlier_views") && (
+                      <td className="px-3 py-2.5 text-xs tabular-nums">
+                        {post.outlier_views != null ? (
+                          <span className="flex items-center gap-1">
+                            <span className={outlierColor(post.outlier_views)}>{post.outlier_views.toFixed(1)}</span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${confidenceDot(post.outlier_confidence)}`} title={`Confianza: ${confidenceLabel(post.outlier_confidence)}`} />
+                          </span>
+                        ) : "—"}
+                      </td>
+                    )}
+                    {visibleCols.has("outlier_engagement") && (
+                      <td className="px-3 py-2.5 text-xs tabular-nums">
+                        {post.outlier_engagement != null ? (
+                          <span className="flex items-center gap-1">
+                            <span className={outlierColor(post.outlier_engagement)}>{post.outlier_engagement.toFixed(1)}</span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${confidenceDot(post.outlier_confidence)}`} title={`Confianza: ${confidenceLabel(post.outlier_confidence)}`} />
+                          </span>
+                        ) : "—"}
+                      </td>
+                    )}
+                    {visibleCols.has("outlier_confidence") && (
+                      <td className="px-3 py-2.5 text-xs">
+                        <span className={`px-1.5 py-0.5 rounded border text-[10px] ${confidenceBadge(post.outlier_confidence)}`}>
+                          {confidenceLabel(post.outlier_confidence)}
+                        </span>
                       </td>
                     )}
                   </tr>
