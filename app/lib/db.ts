@@ -751,10 +751,7 @@ export interface IgPulseStats {
 
 export async function getIgConnection(userId: string): Promise<IgConnection | null> {
   const result = await pool.query(
-    `SELECT id, ig_account_id, ig_username, ig_name, ig_profile_picture_url,
-            ig_followers_count, ig_media_count,
-            ig_biography, ig_website, ig_account_type, is_active,
-            connected_at, last_synced_at
+    `SELECT *
      FROM ig_connections
      WHERE user_id = $1 AND is_active = true
      ORDER BY connected_at DESC LIMIT 1`,
@@ -836,11 +833,7 @@ export async function getIgMedia(
   );
 
   const result = await pool.query(
-    `SELECT id, ig_media_id, media_type, media_product_type, caption,
-            permalink, media_url, thumbnail_url, published_at,
-            like_count, comments_count, reach, views, saves, shares,
-            total_interactions, follows, profile_visits,
-            ig_reels_avg_watch_time, ig_reels_video_view_total_time, skip_rate
+    `SELECT *
      FROM ig_media m
      WHERE ig_connection_id = $1
      ORDER BY ${orderCol} ${dir} NULLS LAST
