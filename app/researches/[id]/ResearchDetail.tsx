@@ -127,6 +127,12 @@ export function ResearchDetail({
             AI Analysis
           </Link>
           <Link
+            href="/instagram"
+            className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+          >
+            Mi Instagram
+          </Link>
+          <Link
             href="/settings"
             className="px-2 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
           >

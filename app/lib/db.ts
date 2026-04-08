@@ -677,6 +677,180 @@ export async function getDatasetMetadataForAgent(datasetId: number) {
   };
 }
 
+// ── Instagram Dashboard (cuentas propias via Meta API) ──
+
+export interface IgConnection {
+  id: number;
+  ig_account_id: string;
+  ig_username: string;
+  ig_name: string | null;
+  ig_profile_picture_url: string | null;
+  ig_followers_count: number;
+  ig_following_count: number | null;
+  ig_media_count: number;
+  ig_biography: string | null;
+  ig_website: string | null;
+  ig_account_type: string | null;
+  is_active: boolean;
+  connected_at: string;
+  last_synced_at: string | null;
+}
+
+export interface IgDailyMetrics {
+  metric_date: string;
+  reach: number;
+  views: number;
+  accounts_engaged: number;
+  total_interactions: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  replies: number;
+  reposts: number;
+  follows: number;
+  unfollows: number;
+  follows_net: number;
+  profile_links_taps: number;
+  breakdowns: Record<string, Record<string, number>>;
+}
+
+export interface IgMedia {
+  id: number;
+  ig_media_id: string;
+  media_type: string;
+  media_product_type: string | null;
+  caption: string | null;
+  permalink: string | null;
+  media_url: string | null;
+  thumbnail_url: string | null;
+  published_at: string | null;
+  like_count: number;
+  comments_count: number;
+  reach: number | null;
+  views: number | null;
+  saves: number | null;
+  shares: number | null;
+  total_interactions: number | null;
+  follows: number | null;
+  profile_visits: number | null;
+  ig_reels_avg_watch_time: number | null;
+  ig_reels_video_view_total_time: number | null;
+  skip_rate: number | null;
+}
+
+export interface IgPulseStats {
+  followers: number;
+  followers_delta: number;
+  avg_reach_7d: number;
+  avg_reach_prev_7d: number;
+  avg_engagement_7d: number;
+  avg_engagement_prev_7d: number;
+  total_posts: number;
+}
+
+export async function getIgConnection(userId: string): Promise<IgConnection | null> {
+  const result = await pool.query(
+    `SELECT id, ig_account_id, ig_username, ig_name, ig_profile_picture_url,
+            ig_followers_count, ig_following_count, ig_media_count,
+            ig_biography, ig_website, ig_account_type, is_active,
+            connected_at, last_synced_at
+     FROM ig_connections
+     WHERE user_id = $1 AND is_active = true
+     ORDER BY connected_at DESC LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
+export async function getIgDailyMetrics(connectionId: number, days: number = 30): Promise<IgDailyMetrics[]> {
+  const result = await pool.query(
+    `SELECT metric_date, reach, views, accounts_engaged, total_interactions,
+            likes, comments, shares, saves, replies, reposts,
+            follows, unfollows, follows_net, profile_links_taps, breakdowns
+     FROM ig_account_daily_metrics
+     WHERE ig_connection_id = $1
+       AND metric_date >= CURRENT_DATE - $2::int
+     ORDER BY metric_date ASC`,
+    [connectionId, days]
+  );
+  return result.rows.map((r: Record<string, unknown>) => ({
+    ...r,
+    breakdowns: typeof r.breakdowns === 'string' ? JSON.parse(r.breakdowns as string) : (r.breakdowns || {}),
+  })) as IgDailyMetrics[];
+}
+
+export async function getIgPulseStats(connectionId: number): Promise<IgPulseStats> {
+  const result = await pool.query(
+    `WITH recent AS (
+       SELECT * FROM ig_account_daily_metrics
+       WHERE ig_connection_id = $1 AND metric_date >= CURRENT_DATE - 14
+     ),
+     last7 AS (SELECT * FROM recent WHERE metric_date >= CURRENT_DATE - 7),
+     prev7 AS (SELECT * FROM recent WHERE metric_date < CURRENT_DATE - 7)
+     SELECT
+       (SELECT ig_followers_count FROM ig_connections WHERE id = $1) as followers,
+       COALESCE((SELECT SUM(follows_net) FROM last7), 0) as followers_delta,
+       COALESCE((SELECT ROUND(AVG(reach)) FROM last7), 0) as avg_reach_7d,
+       COALESCE((SELECT ROUND(AVG(reach)) FROM prev7), 0) as avg_reach_prev_7d,
+       COALESCE((SELECT ROUND(AVG(total_interactions)) FROM last7), 0) as avg_engagement_7d,
+       COALESCE((SELECT ROUND(AVG(total_interactions)) FROM prev7), 0) as avg_engagement_prev_7d,
+       (SELECT COUNT(*)::int FROM ig_media WHERE ig_connection_id = $1) as total_posts`,
+    [connectionId]
+  );
+  const r = result.rows[0];
+  return {
+    followers: parseInt(r.followers) || 0,
+    followers_delta: parseInt(r.followers_delta) || 0,
+    avg_reach_7d: parseInt(r.avg_reach_7d) || 0,
+    avg_reach_prev_7d: parseInt(r.avg_reach_prev_7d) || 0,
+    avg_engagement_7d: parseInt(r.avg_engagement_7d) || 0,
+    avg_engagement_prev_7d: parseInt(r.avg_engagement_prev_7d) || 0,
+    total_posts: parseInt(r.total_posts) || 0,
+  };
+}
+
+export async function getIgMedia(
+  connectionId: number,
+  sortBy: string = "published_at",
+  sortDir: string = "DESC",
+  limit: number = 100,
+  offset: number = 0
+): Promise<{ media: IgMedia[]; total: number }> {
+  const allowedSorts: Record<string, string> = {
+    published_at: "m.published_at",
+    reach: "m.reach",
+    views: "m.views",
+    likes: "m.like_count",
+    saves: "m.saves",
+    shares: "m.shares",
+    total_interactions: "m.total_interactions",
+    ig_reels_avg_watch_time: "m.ig_reels_avg_watch_time",
+  };
+  const orderCol = allowedSorts[sortBy] || "m.published_at";
+  const dir = sortDir === "ASC" ? "ASC" : "DESC";
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int FROM ig_media WHERE ig_connection_id = $1`,
+    [connectionId]
+  );
+
+  const result = await pool.query(
+    `SELECT id, ig_media_id, media_type, media_product_type, caption,
+            permalink, media_url, thumbnail_url, published_at,
+            like_count, comments_count, reach, views, saves, shares,
+            total_interactions, follows, profile_visits,
+            ig_reels_avg_watch_time, ig_reels_video_view_total_time, skip_rate
+     FROM ig_media m
+     WHERE ig_connection_id = $1
+     ORDER BY ${orderCol} ${dir} NULLS LAST
+     LIMIT $2 OFFSET $3`,
+    [connectionId, limit, offset]
+  );
+
+  return { media: result.rows, total: countResult.rows[0].count };
+}
+
 export async function getDatasetFullContent(datasetId: number) {
   const result = await pool.query(`
     SELECT
