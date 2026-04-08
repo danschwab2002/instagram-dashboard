@@ -46,8 +46,8 @@ export function PulseView({ stats, dailyMetrics, connection }: Props) {
 
   // Chart data
   const chartData = dailyMetrics.map((d) => ({
-    date: d.metric_date,
-    value: d[selectedMetric] as number,
+    date: typeof d.metric_date === 'string' ? d.metric_date : new Date(d.metric_date).toISOString().split('T')[0],
+    value: (d[selectedMetric] as number) || 0,
   }));
 
   const maxValue = Math.max(...chartData.map((d) => d.value), 1);
