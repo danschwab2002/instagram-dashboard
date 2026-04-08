@@ -615,6 +615,9 @@ export function Dashboard({
                 {visibleCols.has("date") && <SortHeader col="posted_at" label="Fecha" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("date")} />}
                 {visibleCols.has("scraped_at") && <ThWithTooltip label="Scrapeado" tooltip={colTooltip("scraped_at")} />}
                 {visibleCols.has("ai_status") && <ThWithTooltip label="IA" tooltip={colTooltip("ai_status")} />}
+                {visibleCols.has("outlier_views") && <SortHeader col="outlier_views" label="OV" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("outlier_views")} />}
+                {visibleCols.has("outlier_engagement") && <SortHeader col="outlier_engagement" label="OE" current={filters.sortBy!} icon={sortIcon} onClick={toggleSort} tooltip={colTooltip("outlier_engagement")} />}
+                {visibleCols.has("outlier_confidence") && <ThWithTooltip label="Conf." tooltip={colTooltip("outlier_confidence")} />}
               </tr>
             </thead>
             <tbody>
