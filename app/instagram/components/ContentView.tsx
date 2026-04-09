@@ -18,6 +18,25 @@ function formatDuration(ms: number | null): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+function formatPercent(n: number | null): string {
+  if (n == null) return "—";
+  return (n * 100).toFixed(2) + "%";
+}
+
+function formatScore(n: number | null): string {
+  if (n == null) return "—";
+  return n.toFixed(1);
+}
+
+function confidenceDot(confidence: string | null): string {
+  switch (confidence) {
+    case "high": return "bg-green-400";
+    case "medium": return "bg-yellow-400";
+    case "low": return "bg-red-400";
+    default: return "bg-zinc-500";
+  }
+}
+
 function timeAgo(date: string | null): string {
   if (!date) return "—";
   const diff = Date.now() - new Date(date).getTime();
@@ -48,7 +67,7 @@ interface Props {
   connectionId: number;
 }
 
-type SortKey = "published_at" | "reach" | "views" | "like_count" | "saves" | "shares" | "total_interactions" | "ig_reels_avg_watch_time";
+type SortKey = "published_at" | "reach" | "views" | "like_count" | "saves" | "shares" | "total_interactions" | "ig_reels_avg_watch_time" | "skip_rate" | "engagement_rate" | "performance_score" | "outlier_views" | "outlier_engagement";
 
 export function ContentView({ media, total, connectionId }: Props) {
   const [sortBy, setSortBy] = useState<SortKey>("published_at");
@@ -108,6 +127,11 @@ export function ContentView({ media, total, connectionId }: Props) {
                 <SortHeader label="Shares" sortKey="shares" />
                 <SortHeader label="Interact." sortKey="total_interactions" />
                 <SortHeader label="Avg Watch" sortKey="ig_reels_avg_watch_time" />
+                <SortHeader label="Skip Rate" sortKey="skip_rate" />
+                <SortHeader label="Eng. Rate" sortKey="engagement_rate" />
+                <SortHeader label="Score" sortKey="performance_score" />
+                <SortHeader label="OV" sortKey="outlier_views" />
+                <SortHeader label="OE" sortKey="outlier_engagement" />
                 <SortHeader label="Fecha" sortKey="published_at" />
               </tr>
             </thead>
@@ -143,6 +167,33 @@ export function ContentView({ media, total, connectionId }: Props) {
                     <td className="px-3 py-2 text-xs text-[var(--text-primary)]">
                       {formatDuration(item.ig_reels_avg_watch_time)}
                     </td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-primary)]">
+                      {item.skip_rate != null ? (item.skip_rate * 100).toFixed(1) + "%" : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-primary)]">
+                      {formatPercent(item.engagement_rate)}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-primary)] font-medium">
+                      {item.performance_score != null ? item.performance_score.toFixed(3) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-primary)]">
+                      <span className="flex items-center gap-1">
+                        {formatScore(item.outlier_views)}
+                        {item.outlier_confidence && (
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${confidenceDot(item.outlier_confidence)}`}
+                                title={`Confianza: ${item.outlier_confidence}`} />
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-primary)]">
+                      <span className="flex items-center gap-1">
+                        {formatScore(item.outlier_engagement)}
+                        {item.outlier_confidence && (
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${confidenceDot(item.outlier_confidence)}`}
+                                title={`Confianza: ${item.outlier_confidence}`} />
+                        )}
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-xs text-[var(--text-muted)]">
                       {timeAgo(item.published_at)}
                     </td>
@@ -151,7 +202,7 @@ export function ContentView({ media, total, connectionId }: Props) {
               })}
               {sorted.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-12 text-center text-[var(--text-muted)]">
+                  <td colSpan={17} className="px-3 py-12 text-center text-[var(--text-muted)]">
                     No hay publicaciones cargadas. Ejecuta la carga historica desde n8n.
                   </td>
                 </tr>
@@ -225,6 +276,44 @@ function MediaModal({ media, onClose }: { media: IgMedia; onClose: () => void })
                 displayValue={media.skip_rate != null ? (media.skip_rate * 100).toFixed(1) + "%" : "—"}
               />
             </div>
+          )}
+
+          {/* Metricas calculadas */}
+          {(media.engagement_rate != null || media.performance_score != null || media.outlier_views != null) && (
+            <>
+              <h3 className="text-xs font-medium text-[var(--text-muted)] pt-2">Metricas calculadas</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <MetricCard
+                  label="Engagement Rate"
+                  value={null}
+                  displayValue={formatPercent(media.engagement_rate)}
+                />
+                <MetricCard
+                  label="Performance Score"
+                  value={null}
+                  displayValue={media.performance_score != null ? media.performance_score.toFixed(3) : "—"}
+                />
+                <div className="rounded border border-[var(--border)] bg-[var(--bg-primary)] p-3">
+                  <div className="text-[10px] text-[var(--text-muted)] mb-1">Confianza outlier</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${confidenceDot(media.outlier_confidence)}`} />
+                    <span className="text-lg font-semibold text-[var(--text-primary)]">
+                      {media.outlier_confidence === "high" ? "Alta" : media.outlier_confidence === "medium" ? "Media" : "Baja"}
+                    </span>
+                  </div>
+                </div>
+                <MetricCard
+                  label="Outlier Views"
+                  value={null}
+                  displayValue={formatScore(media.outlier_views)}
+                />
+                <MetricCard
+                  label="Outlier Engagement"
+                  value={null}
+                  displayValue={formatScore(media.outlier_engagement)}
+                />
+              </div>
+            </>
           )}
 
           {/* Link to Instagram */}

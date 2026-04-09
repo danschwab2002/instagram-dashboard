@@ -763,6 +763,12 @@ export interface IgMedia {
   ig_reels_avg_watch_time: number | null;
   ig_reels_video_view_total_time: number | null;
   skip_rate: number | null;
+  engagement_rate: number | null;
+  performance_score: number | null;
+  outlier_views: number | null;
+  outlier_engagement: number | null;
+  outlier_confidence: string | null;
+  outlier_confidence_score: number | null;
 }
 
 export interface IgPulseStats {
@@ -849,6 +855,11 @@ export async function getIgMedia(
     shares: "m.shares",
     total_interactions: "m.total_interactions",
     ig_reels_avg_watch_time: "m.ig_reels_avg_watch_time",
+    skip_rate: "m.skip_rate",
+    engagement_rate: "m.engagement_rate",
+    performance_score: "m.performance_score",
+    outlier_views: "m.outlier_views",
+    outlier_engagement: "m.outlier_engagement",
   };
   const orderCol = allowedSorts[sortBy] || "m.published_at";
   const dir = sortDir === "ASC" ? "ASC" : "DESC";
