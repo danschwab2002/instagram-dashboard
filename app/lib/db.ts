@@ -763,6 +763,7 @@ export interface IgMedia {
   ig_reels_avg_watch_time: number | null;
   ig_reels_video_view_total_time: number | null;
   skip_rate: number | null;
+  stored_url: string | null;
   engagement_rate: number | null;
   performance_score: number | null;
   outlier_views: number | null;

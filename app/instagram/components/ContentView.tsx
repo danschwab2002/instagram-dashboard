@@ -245,9 +245,9 @@ function MediaModal({ media, onClose }: { media: IgMedia; onClose: () => void })
         </div>
 
         {/* Video player */}
-        {media.media_url ? (
+        {(media.stored_url || media.media_url) ? (
           <div className="bg-black">
-            <video src={media.media_url} controls autoPlay className="w-full max-h-[60vh] object-contain" />
+            <video src={media.stored_url || media.media_url!} controls autoPlay className="w-full max-h-[60vh] object-contain" />
           </div>
         ) : media.thumbnail_url ? (
           <div className="bg-black flex items-center justify-center">
