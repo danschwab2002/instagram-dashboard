@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { IgPulseStats, IgDailyMetrics, IgConnection } from "../../lib/db";
 
 function formatNumber(n: number): string {
@@ -30,6 +30,14 @@ const METRIC_OPTIONS = [
   { key: "follows_net", label: "Seguidores netos" },
 ] as const;
 
+const RANGE_OPTIONS = [
+  { days: 7, label: "7d" },
+  { days: 15, label: "15d" },
+  { days: 30, label: "30d" },
+  { days: 90, label: "90d" },
+  { days: 180, label: "180d" },
+] as const;
+
 type MetricKey = (typeof METRIC_OPTIONS)[number]["key"];
 
 interface Props {
@@ -40,17 +48,31 @@ interface Props {
 
 export function PulseView({ stats, dailyMetrics, connection }: Props) {
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>("reach");
+  const [selectedRange, setSelectedRange] = useState(30);
 
   const reachDelta = deltaPercent(stats.avg_reach_7d, stats.avg_reach_prev_7d);
   const engagementDelta = deltaPercent(stats.avg_engagement_7d, stats.avg_engagement_prev_7d);
 
+  // Filter by selected range
+  const filteredMetrics = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - selectedRange);
+    return dailyMetrics.filter((d) => {
+      const date = typeof d.metric_date === "string" ? new Date(d.metric_date) : d.metric_date;
+      return date >= cutoff;
+    });
+  }, [dailyMetrics, selectedRange]);
+
   // Chart data
-  const chartData = dailyMetrics.map((d) => ({
+  const chartData = filteredMetrics.map((d) => ({
     date: typeof d.metric_date === 'string' ? d.metric_date : new Date(d.metric_date).toISOString().split('T')[0],
     value: (d[selectedMetric] as number) || 0,
   }));
 
   const maxValue = Math.max(...chartData.map((d) => d.value), 1);
+
+  // Auto-select best range based on available data
+  const availableDays = dailyMetrics.length;
 
   return (
     <div className="space-y-6">
@@ -104,7 +126,29 @@ export function PulseView({ stats, dailyMetrics, connection }: Props) {
       {/* Chart */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-[var(--text-primary)]">Tendencia (30 dias)</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-medium text-[var(--text-primary)]">Tendencia</h2>
+            <div className="flex rounded border border-[var(--border)] overflow-hidden">
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.days}
+                  onClick={() => setSelectedRange(opt.days)}
+                  className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                    selectedRange === opt.days
+                      ? "bg-indigo-600 text-white"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {availableDays < selectedRange && (
+              <span className="text-[10px] text-[var(--text-muted)]">
+                ({availableDays} {availableDays === 1 ? "dia" : "dias"} disponibles)
+              </span>
+            )}
+          </div>
           <select
             value={selectedMetric}
             onChange={(e) => setSelectedMetric(e.target.value as MetricKey)}
@@ -136,10 +180,10 @@ export function PulseView({ stats, dailyMetrics, connection }: Props) {
               {chartData.map((d, i) => {
                 const height = maxValue > 0 ? (d.value / maxValue) * 100 : 0;
                 return (
-                  <div key={i} className="flex-1 flex flex-col items-center group relative">
+                  <div key={i} className="flex-1 flex flex-col items-center group relative" style={{ maxWidth: chartData.length < 10 ? "60px" : undefined }}>
                     <div
                       className="w-full bg-indigo-500/60 hover:bg-indigo-500 rounded-t transition-all cursor-pointer"
-                      style={{ height: `${Math.max(height, 1)}%` }}
+                      style={{ height: `${Math.max(height, 2)}%` }}
                     />
                     {/* Tooltip */}
                     <div className="absolute bottom-full mb-2 hidden group-hover:block z-10">
@@ -160,6 +204,11 @@ export function PulseView({ stats, dailyMetrics, connection }: Props) {
                   <span className="text-[10px] text-[var(--text-muted)]">
                     {chartData[0].date.slice(5)}
                   </span>
+                  {chartData.length > 2 && (
+                    <span className="text-[10px] text-[var(--text-muted)]">
+                      {chartData[Math.floor(chartData.length / 2)].date.slice(5)}
+                    </span>
+                  )}
                   <span className="text-[10px] text-[var(--text-muted)]">
                     {chartData[chartData.length - 1].date.slice(5)}
                   </span>

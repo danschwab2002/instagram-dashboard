@@ -31,7 +31,7 @@ export default async function Page() {
 
   const [pulseStats, dailyMetrics, mediaResult] = await Promise.all([
     getIgPulseStats(connection.id),
-    getIgDailyMetrics(connection.id, 30),
+    getIgDailyMetrics(connection.id, 180),
     getIgMedia(connection.id, "published_at", "DESC", 100, 0),
   ]);
 
