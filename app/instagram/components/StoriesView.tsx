@@ -303,67 +303,77 @@ function StoryDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg mx-4 max-h-[90vh] overflow-hidden flex"
+        style={{ maxWidth: "900px", height: "85vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-          <div className="flex items-center gap-2">
-            <span className="text-xs px-1.5 py-0.5 rounded border bg-amber-500/15 text-amber-400 border-amber-500/30">
-              Story
-            </span>
-            <span className="text-xs text-[var(--text-muted)]">
-              {story.published_at ? new Date(story.published_at).toLocaleString("es-AR") : "—"}
-            </span>
-            {!story.is_story_expired && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/40">
-                {timeRemaining(story.story_expires_at)}
-              </span>
-            )}
-          </div>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2">
-            ×
-          </button>
-        </div>
-
-        {/* Media preview */}
-        {(story.stored_url || story.media_url) && (
-          <div className="bg-black max-h-[40vh] flex items-center justify-center">
-            {story.media_type === "VIDEO" ? (
+        {/* Left: Story media (9:16 aspect) */}
+        <div className="shrink-0 bg-black flex items-center justify-center relative" style={{ width: "340px" }}>
+          {(story.stored_url || story.media_url) ? (
+            story.media_type === "VIDEO" ? (
               <video
                 src={story.stored_url || story.media_url!}
                 controls
                 autoPlay
-                className="max-h-[40vh] object-contain"
+                className="w-full h-full object-contain"
               />
             ) : (
               <img
                 src={story.media_url!}
                 alt=""
-                className="max-h-[40vh] object-contain"
+                className="w-full h-full object-contain"
               />
-            )}
+            )
+          ) : (
+            <div className="text-[var(--text-muted)] text-sm">Sin preview</div>
+          )}
+          {/* Timer badge */}
+          {!story.is_story_expired && (
+            <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-green-500/20 border border-green-500/40 text-[10px] text-green-400 font-medium">
+              {timeRemaining(story.story_expires_at)}
+            </div>
+          )}
+          {/* Type badge */}
+          <div className="absolute top-3 left-3 px-1.5 py-0.5 rounded bg-black/60 text-[10px] text-white">
+            {story.media_type === "VIDEO" ? "Video" : "Foto"}
           </div>
-        )}
-
-        {/* Metrics grid */}
-        <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Alcance</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.reach)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.views)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Impresiones</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.impressions)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Respuestas</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.replies)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Compartidos</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.shares)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Interacciones</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.total_interactions)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Follows</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.follows)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Visitas perfil</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.profile_visits)}</p></div>
+          {/* Date */}
+          <div className="absolute bottom-3 left-3 px-1.5 py-0.5 rounded bg-black/60 text-[10px] text-white">
+            {story.published_at ? new Date(story.published_at).toLocaleString("es-AR") : "—"}
+          </div>
         </div>
 
-        {/* Navigation breakdown */}
-        <div className="grid grid-cols-3 gap-3 px-4 py-3 border-b border-[var(--border)]">
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Tap adelante</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.navigation_tap_forward)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Tap atras</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.navigation_tap_back)}</p></div>
-          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Salida</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.navigation_tap_exit)}</p></div>
-        </div>
+        {/* Right: Metrics + chart */}
+        <div className="flex-1 flex flex-col overflow-y-auto min-w-0">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-1.5 py-0.5 rounded border bg-amber-500/15 text-amber-400 border-amber-500/30">
+                Story
+              </span>
+              {story.is_story_expired && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-500/20 text-zinc-400 border border-zinc-500/40">
+                  Expirada
+                </span>
+              )}
+            </div>
+            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2">
+              ×
+            </button>
+          </div>
+
+          {/* Metrics grid */}
+          <div className="grid grid-cols-3 gap-3 p-4 border-b border-[var(--border)] shrink-0">
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Alcance</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.reach)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.views)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Respuestas</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.replies)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Compartidos</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.shares)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Interacciones</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.total_interactions)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Follows</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.follows)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Visitas perfil</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.profile_visits)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Tap adelante</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.navigation_tap_forward)}</p></div>
+            <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Tap atras / Salida</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(story.navigation_tap_back)} / {formatNumber(story.navigation_tap_exit)}</p></div>
+          </div>
 
         {/* Evolution chart */}
         <div className="p-4">
@@ -480,14 +490,15 @@ function StoryDetailModal({
           )}
         </div>
 
-        {/* Link to Instagram */}
-        {story.permalink && (
-          <div className="px-4 pb-4">
-            <a href={story.permalink} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-400 hover:text-indigo-300">
-              Ver en Instagram →
-            </a>
-          </div>
-        )}
+          {/* Link to Instagram */}
+          {story.permalink && (
+            <div className="px-4 pb-4 shrink-0">
+              <a href={story.permalink} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-400 hover:text-indigo-300">
+                Ver en Instagram →
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
