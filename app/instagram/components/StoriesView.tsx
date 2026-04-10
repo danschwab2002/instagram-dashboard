@@ -103,7 +103,7 @@ export function StoriesView({ activeStories, historicalStories }: Props) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex gap-4 overflow-x-auto pb-2">
             {activeStories.map((story) => (
               <ActiveStoryCard
                 key={story.id}
@@ -127,7 +127,7 @@ export function StoriesView({ activeStories, historicalStories }: Props) {
                 <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">
                   {group.label}
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                <div className="flex gap-3 overflow-x-auto pb-2">
                   {group.stories.map((story) => (
                     <HistoricalStoryCard
                       key={story.id}
@@ -162,10 +162,11 @@ function ActiveStoryCard({ story, onClick }: { story: IgMedia; onClick: () => vo
   return (
     <div
       className="rounded-lg border border-indigo-500/30 bg-[var(--bg-secondary)] overflow-hidden cursor-pointer hover:border-indigo-500/60 transition group"
+      style={{ width: "220px" }}
       onClick={onClick}
     >
-      {/* Preview */}
-      <div className="relative h-48 bg-black">
+      {/* Preview 9:16 */}
+      <div className="relative bg-black" style={{ aspectRatio: "9/16" }}>
         {story.media_url ? (
           story.media_type === "VIDEO" ? (
             <video
@@ -196,21 +197,21 @@ function ActiveStoryCard({ story, onClick }: { story: IgMedia; onClick: () => vo
       </div>
 
       {/* Metrics */}
-      <div className="p-3">
-        <div className="grid grid-cols-4 gap-2 text-center">
-          <MetricMini label="Alcance" value={story.reach} />
-          <MetricMini label="Views" value={story.views} />
-          <MetricMini label="Replies" value={story.replies} />
-          <MetricMini label="Shares" value={story.shares} />
+      <div className="p-2.5">
+        <div className="grid grid-cols-4 gap-1 text-center">
+          <MetricMini label="Alcance" value={story.reach} small />
+          <MetricMini label="Views" value={story.views} small />
+          <MetricMini label="Replies" value={story.replies} small />
+          <MetricMini label="Shares" value={story.shares} small />
         </div>
-        <div className="grid grid-cols-4 gap-2 text-center mt-2">
-          <MetricMini label="Interact." value={story.total_interactions} />
-          <MetricMini label="Follows" value={story.follows} />
-          <MetricMini label="Fwd" value={story.navigation_tap_forward} />
-          <MetricMini label="Exit" value={story.navigation_tap_exit} />
+        <div className="grid grid-cols-4 gap-1 text-center mt-1.5">
+          <MetricMini label="Interact." value={story.total_interactions} small />
+          <MetricMini label="Follows" value={story.follows} small />
+          <MetricMini label="Fwd" value={story.navigation_tap_forward} small />
+          <MetricMini label="Exit" value={story.navigation_tap_exit} small />
         </div>
-        <div className="text-[10px] text-[var(--text-muted)] mt-2 text-right">
-          Publicada hace {timeAgo(story.published_at)}
+        <div className="text-[9px] text-[var(--text-muted)] mt-1.5 text-right">
+          Hace {timeAgo(story.published_at)}
         </div>
       </div>
     </div>
@@ -220,11 +221,12 @@ function ActiveStoryCard({ story, onClick }: { story: IgMedia; onClick: () => vo
 function HistoricalStoryCard({ story, onClick }: { story: IgMedia; onClick: () => void }) {
   return (
     <div
-      className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden cursor-pointer hover:border-[var(--text-muted)] transition"
+      className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden cursor-pointer hover:border-[var(--text-muted)] transition shrink-0"
+      style={{ width: "140px" }}
       onClick={onClick}
     >
-      {/* Thumbnail */}
-      <div className="relative h-32 bg-black">
+      {/* Thumbnail 9:16 */}
+      <div className="relative bg-black" style={{ aspectRatio: "9/16" }}>
         {story.thumbnail_url || story.media_url ? (
           <img
             src={story.thumbnail_url || story.media_url || ""}
@@ -239,19 +241,19 @@ function HistoricalStoryCard({ story, onClick }: { story: IgMedia; onClick: () =
         <div className="absolute top-1.5 left-1.5 px-1 py-0.5 rounded bg-black/60 text-[9px] text-white">
           {story.media_type === "VIDEO" ? "Video" : "Foto"}
         </div>
-      </div>
-
-      {/* Compact metrics */}
-      <div className="p-2">
-        <div className="grid grid-cols-3 gap-1 text-center">
-          <MetricMini label="Alcance" value={story.reach} small />
-          <MetricMini label="Views" value={story.views} small />
-          <MetricMini label="Interact." value={story.total_interactions} small />
-        </div>
-        <div className="text-[9px] text-[var(--text-muted)] mt-1.5 text-right">
+        <div className="absolute bottom-1.5 right-1.5 px-1 py-0.5 rounded bg-black/60 text-[9px] text-white">
           {story.published_at
             ? new Date(story.published_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
             : "—"}
+        </div>
+      </div>
+
+      {/* Compact metrics */}
+      <div className="p-1.5">
+        <div className="grid grid-cols-3 gap-0.5 text-center">
+          <MetricMini label="Alc." value={story.reach} small />
+          <MetricMini label="Views" value={story.views} small />
+          <MetricMini label="Int." value={story.total_interactions} small />
         </div>
       </div>
     </div>
