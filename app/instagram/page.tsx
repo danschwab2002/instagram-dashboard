@@ -1,5 +1,5 @@
 import { requireUser } from "../lib/auth";
-import { getIgConnection, getIgDailyMetrics, getIgPulseStats, getIgMedia } from "../lib/db";
+import { getIgConnection, getIgDailyMetrics, getIgPulseStats, getIgMedia, getIgStories } from "../lib/db";
 import { InstagramDashboard } from "./components/InstagramDashboard";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +29,11 @@ export default async function Page() {
     );
   }
 
-  const [pulseStats, dailyMetrics, mediaResult] = await Promise.all([
+  const [pulseStats, dailyMetrics, mediaResult, storiesResult] = await Promise.all([
     getIgPulseStats(connection.id),
     getIgDailyMetrics(connection.id, 180),
     getIgMedia(connection.id, "published_at", "DESC", 100, 0),
+    getIgStories(connection.id),
   ]);
 
   return (
@@ -42,6 +43,8 @@ export default async function Page() {
       dailyMetrics={dailyMetrics}
       media={mediaResult.media}
       totalMedia={mediaResult.total}
+      activeStories={storiesResult.active}
+      historicalStories={storiesResult.historical}
       userEmail={user.email || ""}
     />
   );

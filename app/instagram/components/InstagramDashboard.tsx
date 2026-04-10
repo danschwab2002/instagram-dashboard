@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/browser";
 import { PulseView } from "./PulseView";
 import { ContentView } from "./ContentView";
+import { StoriesView } from "./StoriesView";
 import type { IgConnection, IgPulseStats, IgDailyMetrics, IgMedia } from "../../lib/db";
 
 const NAV_LINKS = [
@@ -19,6 +20,7 @@ const NAV_LINKS = [
 const TABS = [
   { key: "pulse", label: "Pulso" },
   { key: "content", label: "Contenido" },
+  { key: "stories", label: "Historias" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -29,6 +31,8 @@ interface Props {
   dailyMetrics: IgDailyMetrics[];
   media: IgMedia[];
   totalMedia: number;
+  activeStories: IgMedia[];
+  historicalStories: IgMedia[];
   userEmail: string;
 }
 
@@ -38,6 +42,8 @@ export function InstagramDashboard({
   dailyMetrics,
   media,
   totalMedia,
+  activeStories,
+  historicalStories,
   userEmail,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>("pulse");
@@ -151,6 +157,12 @@ export function InstagramDashboard({
               media={media}
               total={totalMedia}
               connectionId={connection.id}
+            />
+          )}
+          {activeTab === "stories" && (
+            <StoriesView
+              activeStories={activeStories}
+              historicalStories={historicalStories}
             />
           )}
         </div>

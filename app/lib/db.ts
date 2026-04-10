@@ -763,6 +763,13 @@ export interface IgMedia {
   ig_reels_avg_watch_time: number | null;
   ig_reels_video_view_total_time: number | null;
   skip_rate: number | null;
+  impressions: number | null;
+  is_story_expired: boolean;
+  story_expires_at: string | null;
+  navigation_tap_forward: number | null;
+  navigation_tap_back: number | null;
+  navigation_tap_exit: number | null;
+  replies: number | null;
   stored_url: string | null;
   engagement_rate: number | null;
   performance_score: number | null;
@@ -880,6 +887,63 @@ export async function getIgMedia(
   );
 
   return { media: result.rows, total: countResult.rows[0].count };
+}
+
+export interface IgStorySnapshot {
+  synced_at: string;
+  impressions: number;
+  reach: number;
+  views: number;
+  replies: number;
+  shares: number;
+  total_interactions: number;
+  follows: number;
+  profile_visits: number;
+  navigation_tap_forward: number;
+  navigation_tap_back: number;
+  navigation_tap_exit: number;
+}
+
+export async function getIgStories(
+  connectionId: number
+): Promise<{ active: IgMedia[]; historical: IgMedia[] }> {
+  const activeResult = await pool.query(
+    `SELECT *
+     FROM ig_media
+     WHERE ig_connection_id = $1
+       AND media_product_type = 'STORY'
+       AND is_story_expired = false
+     ORDER BY published_at DESC`,
+    [connectionId]
+  );
+
+  const historicalResult = await pool.query(
+    `SELECT *
+     FROM ig_media
+     WHERE ig_connection_id = $1
+       AND media_product_type = 'STORY'
+       AND is_story_expired = true
+     ORDER BY published_at DESC
+     LIMIT 200`,
+    [connectionId]
+  );
+
+  return { active: activeResult.rows, historical: historicalResult.rows };
+}
+
+export async function getIgStorySnapshots(
+  mediaId: number
+): Promise<IgStorySnapshot[]> {
+  const result = await pool.query(
+    `SELECT synced_at, impressions, reach, views, replies, shares,
+            total_interactions, follows, profile_visits,
+            navigation_tap_forward, navigation_tap_back, navigation_tap_exit
+     FROM ig_media_metrics
+     WHERE ig_media_ref = $1
+     ORDER BY synced_at ASC`,
+    [mediaId]
+  );
+  return result.rows;
 }
 
 export async function getDatasetFullContent(datasetId: number) {
