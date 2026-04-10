@@ -224,110 +224,101 @@ function MediaModal({ media, onClose }: { media: IgMedia; onClose: () => void })
   const tt = typeLabel(media.media_product_type);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto mx-4"
+        className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <div className="flex items-center gap-2">
-            <span className={`text-xs px-1.5 py-0.5 rounded border ${tt.color}`}>{tt.text}</span>
-            <span className="text-xs text-[var(--text-muted)]">
-              {media.published_at ? new Date(media.published_at).toLocaleDateString("es-AR") : "—"}
-            </span>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-1.5 py-0.5 rounded border ${tt.color}`}>{tt.text}</span>
+              <span className="text-xs text-[var(--text-muted)]">
+                {media.published_at ? new Date(media.published_at).toLocaleDateString("es-AR") : "—"}
+              </span>
+            </div>
           </div>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-lg">
-            ✕
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl px-2">
+            ×
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Caption */}
-          {media.caption && (
-            <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">
-              {media.caption}
-            </p>
-          )}
-
-          {/* Metrics grid */}
-          <div className="grid grid-cols-3 gap-3">
-            <MetricCard label="Views" value={media.views} />
-            <MetricCard label="Reach" value={media.reach} />
-            <MetricCard label="Likes" value={media.like_count} />
-            <MetricCard label="Comentarios" value={media.comments_count} />
-            <MetricCard label="Guardados" value={media.saves} />
-            <MetricCard label="Compartidos" value={media.shares} />
-            <MetricCard label="Interacciones totales" value={media.total_interactions} />
-            <MetricCard label="Follows" value={media.follows} />
-            <MetricCard label="Visitas al perfil" value={media.profile_visits} />
+        {/* Video player */}
+        {media.media_url ? (
+          <div className="bg-black">
+            <video src={media.media_url} controls autoPlay className="w-full max-h-[60vh] object-contain" />
           </div>
+        ) : media.thumbnail_url ? (
+          <div className="bg-black flex items-center justify-center">
+            <img src={media.thumbnail_url} alt="" className="max-h-[40vh] object-contain" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-48 bg-[var(--bg-primary)] text-[var(--text-muted)] text-sm">
+            Video no disponible
+          </div>
+        )}
 
-          {/* Reel-specific */}
+        {/* Core metrics */}
+        <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Views</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.views)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Reach</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.reach)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Likes</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.like_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Comments</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.comments_count)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Saves</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.saves)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Shares</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.shares)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Interact.</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.total_interactions)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Follows</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.follows)}</p></div>
+        </div>
+
+        {/* Reel-specific + calculated metrics */}
+        <div className="grid grid-cols-4 gap-3 p-4 border-b border-[var(--border)]">
           {media.media_product_type === "REELS" && (
-            <div className="grid grid-cols-2 gap-3">
-              <MetricCard
-                label="Tiempo prom. de visualizacion"
-                value={null}
-                displayValue={formatDuration(media.ig_reels_avg_watch_time)}
-              />
-              <MetricCard
-                label="Skip rate"
-                value={null}
-                displayValue={media.skip_rate != null ? (media.skip_rate * 100).toFixed(1) + "%" : "—"}
-              />
-            </div>
-          )}
-
-          {/* Metricas calculadas */}
-          {(media.engagement_rate != null || media.performance_score != null || media.outlier_views != null) && (
             <>
-              <h3 className="text-xs font-medium text-[var(--text-muted)] pt-2">Metricas calculadas</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <MetricCard
-                  label="Engagement Rate"
-                  value={null}
-                  displayValue={formatPercent(media.engagement_rate)}
-                />
-                <MetricCard
-                  label="Performance Score"
-                  value={null}
-                  displayValue={media.performance_score != null ? media.performance_score.toFixed(3) : "—"}
-                />
-                <div className="rounded border border-[var(--border)] bg-[var(--bg-primary)] p-3">
-                  <div className="text-[10px] text-[var(--text-muted)] mb-1">Confianza outlier</div>
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-block w-2 h-2 rounded-full ${confidenceDot(media.outlier_confidence)}`} />
-                    <span className="text-lg font-semibold text-[var(--text-primary)]">
-                      {media.outlier_confidence === "high" ? "Alta" : media.outlier_confidence === "medium" ? "Media" : "Baja"}
-                    </span>
-                  </div>
-                </div>
-                <MetricCard
-                  label="Outlier Views"
-                  value={null}
-                  displayValue={formatScore(media.outlier_views)}
-                />
-                <MetricCard
-                  label="Outlier Engagement"
-                  value={null}
-                  displayValue={formatScore(media.outlier_engagement)}
-                />
-              </div>
+              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Avg Watch</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatDuration(media.ig_reels_avg_watch_time)}</p></div>
+              <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Skip Rate</p><p className="text-sm font-semibold text-[var(--text-primary)]">{media.skip_rate != null ? (media.skip_rate * 100).toFixed(1) + "%" : "—"}</p></div>
             </>
           )}
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Eng. Rate</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatPercent(media.engagement_rate)}</p></div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Score</p><p className="text-sm font-semibold text-[var(--text-primary)]">{media.performance_score != null ? media.performance_score.toFixed(3) : "—"}</p></div>
+          <div>
+            <p className="text-[10px] uppercase text-[var(--text-muted)]">OV</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1">
+              {formatScore(media.outlier_views)}
+              {media.outlier_confidence && <span className={`inline-block w-1.5 h-1.5 rounded-full ${confidenceDot(media.outlier_confidence)}`} />}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-[var(--text-muted)]">OE</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1">
+              {formatScore(media.outlier_engagement)}
+              {media.outlier_confidence && <span className={`inline-block w-1.5 h-1.5 rounded-full ${confidenceDot(media.outlier_confidence)}`} />}
+            </p>
+          </div>
+          <div><p className="text-[10px] uppercase text-[var(--text-muted)]">Visitas perfil</p><p className="text-sm font-semibold text-[var(--text-primary)]">{formatNumber(media.profile_visits)}</p></div>
+        </div>
 
-          {/* Link to Instagram */}
-          {media.permalink && (
+        {/* Caption */}
+        {media.caption && (
+          <div className="p-4 border-b border-[var(--border)]">
+            <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">Caption</p>
+            <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{media.caption}</p>
+          </div>
+        )}
+
+        {/* Link to Instagram */}
+        {media.permalink && (
+          <div className="p-4">
             <a
               href={media.permalink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block text-xs text-indigo-400 hover:text-indigo-300"
+              className="text-xs text-indigo-400 hover:text-indigo-300"
             >
               Ver en Instagram →
             </a>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
