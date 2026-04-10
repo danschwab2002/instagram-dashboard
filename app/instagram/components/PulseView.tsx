@@ -167,53 +167,132 @@ export function PulseView({ stats, dailyMetrics, connection }: Props) {
             No hay datos de tendencia disponibles. Los datos se acumulan con el sync diario.
           </div>
         ) : (
-          <div className="relative h-64">
-            {/* Y axis labels */}
-            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between text-right pr-2">
-              <span className="text-[10px] text-[var(--text-muted)]">{formatNumber(maxValue)}</span>
-              <span className="text-[10px] text-[var(--text-muted)]">{formatNumber(Math.round(maxValue / 2))}</span>
-              <span className="text-[10px] text-[var(--text-muted)]">0</span>
+          <div className="relative h-72">
+            {/* Y axis labels — scaled to 120% so bars don't touch the top */}
+            {(() => {
+              const yMax = Math.ceil(maxValue * 1.2);
+              return (
+                <div className="absolute left-0 top-0 bottom-10 w-14 flex flex-col justify-between text-right pr-2">
+                  <span className="text-[10px] text-[var(--text-muted)]">{formatNumber(yMax)}</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">{formatNumber(Math.round(yMax / 2))}</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">0</span>
+                </div>
+              );
+            })()}
+
+            {/* Chart area (bars + trend line) */}
+            <div className="ml-16 h-[calc(100%-2.5rem)] relative">
+              {(() => {
+                const yMax = Math.ceil(maxValue * 1.2);
+                const barGap = 3;
+                const count = chartData.length;
+
+                return (
+                  <>
+                    {/* Bars */}
+                    <div className="h-full flex gap-[3px]" style={{ maxWidth: count < 10 ? `${count * 63}px` : undefined }}>
+                      {chartData.map((d, i) => {
+                        const height = yMax > 0 ? (d.value / yMax) * 100 : 0;
+                        return (
+                          <div key={i} className="flex-1 flex flex-col justify-end items-center group relative">
+                            <div
+                              className="w-full bg-indigo-500/40 hover:bg-indigo-500/70 rounded-t transition-all cursor-pointer"
+                              style={{ height: `${Math.max(height, 1)}%` }}
+                            />
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full mb-2 hidden group-hover:block z-10">
+                              <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 text-xs whitespace-nowrap shadow-lg">
+                                <div className="text-[var(--text-primary)] font-medium">{formatNumber(d.value)}</div>
+                                <div className="text-[var(--text-muted)]">{d.date}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Trend line SVG overlay */}
+                    {count >= 2 && (
+                      <svg
+                        className="absolute inset-0 pointer-events-none"
+                        viewBox={`0 0 ${count * 100} 100`}
+                        preserveAspectRatio="none"
+                        style={{ maxWidth: count < 10 ? `${count * 63}px` : undefined }}
+                      >
+                        {/* Smooth curve through bar centers */}
+                        <path
+                          d={(() => {
+                            const points = chartData.map((d, i) => ({
+                              x: (i + 0.5) * (100 / 1) , // will be in viewBox units
+                              y: yMax > 0 ? 100 - (d.value / yMax) * 100 : 100,
+                            }));
+                            // Recalculate x in viewBox coordinates
+                            const pts = points.map((_, i) => ({
+                              x: (i + 0.5) * 100,
+                              y: yMax > 0 ? 100 - (chartData[i].value / yMax) * 100 : 100,
+                            }));
+
+                            if (pts.length === 2) {
+                              return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+                            }
+
+                            // Catmull-Rom to cubic bezier
+                            let path = `M ${pts[0].x} ${pts[0].y}`;
+                            for (let i = 0; i < pts.length - 1; i++) {
+                              const p0 = pts[Math.max(i - 1, 0)];
+                              const p1 = pts[i];
+                              const p2 = pts[i + 1];
+                              const p3 = pts[Math.min(i + 2, pts.length - 1)];
+
+                              const cp1x = p1.x + (p2.x - p0.x) / 6;
+                              const cp1y = p1.y + (p2.y - p0.y) / 6;
+                              const cp2x = p2.x - (p3.x - p1.x) / 6;
+                              const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+                              path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+                            }
+                            return path;
+                          })()}
+                          fill="none"
+                          stroke="rgb(129, 140, 248)"
+                          strokeWidth={count < 10 ? "4" : "2"}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        {/* Dots at each point */}
+                        {chartData.map((d, i) => {
+                          const cx = (i + 0.5) * 100;
+                          const cy = yMax > 0 ? 100 - (d.value / yMax) * 100 : 100;
+                          return (
+                            <circle
+                              key={i}
+                              cx={cx}
+                              cy={cy}
+                              r={count < 10 ? "6" : "3"}
+                              fill="rgb(129, 140, 248)"
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          );
+                        })}
+                      </svg>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
-            {/* Bars */}
-            <div className="ml-14 h-full flex gap-[2px] pb-6">
+            {/* X axis labels — one per bar */}
+            <div className="ml-16 flex gap-[3px] mt-1" style={{ maxWidth: chartData.length < 10 ? `${chartData.length * 63}px` : undefined }}>
               {chartData.map((d, i) => {
-                const height = maxValue > 0 ? (d.value / maxValue) * 100 : 0;
+                // Show all labels if few bars, otherwise show every Nth
+                const showLabel = chartData.length <= 15 || i % Math.ceil(chartData.length / 15) === 0 || i === chartData.length - 1;
                 return (
-                  <div key={i} className="flex-1 flex flex-col justify-end items-center group relative" style={{ maxWidth: chartData.length < 10 ? "60px" : undefined }}>
-                    <div
-                      className="w-full bg-indigo-500/60 hover:bg-indigo-500 rounded-t transition-all cursor-pointer"
-                      style={{ height: `${Math.max(height, 2)}%` }}
-                    />
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full mb-2 hidden group-hover:block z-10">
-                      <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 text-xs whitespace-nowrap">
-                        <div className="text-[var(--text-primary)] font-medium">{formatNumber(d.value)}</div>
-                        <div className="text-[var(--text-muted)]">{d.date}</div>
-                      </div>
-                    </div>
+                  <div key={i} className="flex-1 text-center">
+                    <span className="text-[9px] text-[var(--text-muted)]">
+                      {showLabel ? d.date.slice(5) : ""}
+                    </span>
                   </div>
                 );
               })}
-            </div>
-
-            {/* X axis labels */}
-            <div className="ml-14 flex justify-between mt-1">
-              {chartData.length > 0 && (
-                <>
-                  <span className="text-[10px] text-[var(--text-muted)]">
-                    {chartData[0].date.slice(5)}
-                  </span>
-                  {chartData.length > 2 && (
-                    <span className="text-[10px] text-[var(--text-muted)]">
-                      {chartData[Math.floor(chartData.length / 2)].date.slice(5)}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-[var(--text-muted)]">
-                    {chartData[chartData.length - 1].date.slice(5)}
-                  </span>
-                </>
-              )}
             </div>
           </div>
         )}
