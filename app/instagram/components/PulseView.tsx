@@ -176,11 +176,11 @@ export function PulseView({ stats, dailyMetrics, connection }: Props) {
             </div>
 
             {/* Bars */}
-            <div className="ml-14 h-full flex items-end gap-[2px] pb-6">
+            <div className="ml-14 h-full flex gap-[2px] pb-6">
               {chartData.map((d, i) => {
                 const height = maxValue > 0 ? (d.value / maxValue) * 100 : 0;
                 return (
-                  <div key={i} className="flex-1 flex flex-col items-center group relative" style={{ maxWidth: chartData.length < 10 ? "60px" : undefined }}>
+                  <div key={i} className="flex-1 flex flex-col justify-end items-center group relative" style={{ maxWidth: chartData.length < 10 ? "60px" : undefined }}>
                     <div
                       className="w-full bg-indigo-500/60 hover:bg-indigo-500 rounded-t transition-all cursor-pointer"
                       style={{ height: `${Math.max(height, 2)}%` }}
