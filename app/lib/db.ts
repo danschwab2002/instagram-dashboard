@@ -738,6 +738,7 @@ export interface IgDailyMetrics {
   unfollows: number;
   follows_net: number;
   profile_links_taps: number;
+  followers_count_at_sync: number | null;
   breakdowns: Record<string, Record<string, number>>;
 }
 
@@ -804,7 +805,8 @@ export async function getIgDailyMetrics(connectionId: number, days: number = 30)
   const result = await pool.query(
     `SELECT metric_date, reach, views, accounts_engaged, total_interactions,
             likes, comments, shares, saves, replies, reposts,
-            follows, unfollows, follows_net, profile_links_taps, breakdowns
+            follows, unfollows, follows_net, profile_links_taps,
+            followers_count_at_sync, breakdowns
      FROM ig_account_daily_metrics
      WHERE ig_connection_id = $1
        AND metric_date >= CURRENT_DATE - $2::int

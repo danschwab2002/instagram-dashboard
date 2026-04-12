@@ -28,6 +28,7 @@ const METRIC_OPTIONS = [
   { key: "shares", label: "Compartidos" },
   { key: "saves", label: "Guardados" },
   { key: "follows_net", label: "Seguidores netos" },
+  { key: "followers_count_at_sync", label: "Total seguidores" },
 ] as const;
 
 const RANGE_OPTIONS = [
