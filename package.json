@@ -5,7 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:local": "bash scripts/db-local.sh",
+    "scrape:profiles": "tsx --env-file=.env scripts/scrape-profiles.ts",
+    "scrape:posts": "tsx --env-file=.env scripts/scrape-posts.ts",
+    "test:scrape-profiles": "tsx tests/scrape-profiles.e2e.ts",
+    "test:scrape-posts": "tsx tests/scrape-posts.e2e.ts",
+    "test:pipeline": "tsx tests/research-pipeline.e2e.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
@@ -20,6 +27,10 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwindcss": "^4.2.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12"
   }
 }

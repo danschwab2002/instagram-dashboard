@@ -1,11 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Pool } from "pg";
+import { NextRequest, NextResponse, after } from "next/server";
+import { pool, withTransaction } from "../../lib/pool";
+import { normalizeUsernames } from "../../lib/instagram-username";
+import { runResearchPipeline } from "../../lib/jobs/research-pipeline";
 import { createClient } from "../../lib/supabase/server";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 5,
-});
 
 async function getUser() {
   const supabase = await createClient();
@@ -32,110 +29,122 @@ export async function GET() {
   return NextResponse.json(result.rows);
 }
 
-// POST /api/researches — crea una investigación con sus cuentas
+// POST /api/researches — crea una investigación y dispara su scraping
 export async function POST(request: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const body = await request.json();
-  const { name, description, usernames, days_back } = body as {
-    name: string;
+  let body: {
+    name?: string;
     description?: string;
-    usernames: string[];
+    usernames?: unknown[];
     days_back?: number;
   };
-  const daysBack = Math.max(1, Math.min(365, days_back || 30));
 
-  if (!name || !usernames?.length) {
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body inválido: se esperaba JSON" }, { status: 400 });
+  }
+
+  const { name, description, usernames, days_back } = body ?? {};
+  const daysBack = Math.max(1, Math.min(365, Number(days_back) || 30));
+
+  if (!name?.trim() || !Array.isArray(usernames) || usernames.length === 0) {
     return NextResponse.json(
       { error: "name y usernames son requeridos" },
       { status: 400 }
     );
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    // 1. Crear la investigación con user_id
-    const researchResult = await client.query(
-      `INSERT INTO researches (name, description, status, user_id, days_back) VALUES ($1, $2, 'draft', $3, $4) RETURNING id`,
-      [name, description || null, user.id, daysBack]
+  // El form ya limpia los usernames, pero la API es publica a cualquier cliente
+  // y `accounts.username` es UNIQUE: sin normalizar, "Tesla" y "tesla" crean dos
+  // filas para la misma cuenta de Instagram.
+  const cleanUsernames = normalizeUsernames(usernames);
+  if (cleanUsernames.length === 0) {
+    return NextResponse.json(
+      { error: "Ninguno de los usernames es válido" },
+      { status: 400 }
     );
-    const researchId = researchResult.rows[0].id;
+  }
 
-    // 2. Insertar cuentas (upsert por username) y linkear a la investigación
-    for (const username of usernames) {
-      // Upsert: si la cuenta ya existe, resetear flags para que se re-scrapee
-      const accountResult = await client.query(
-        `INSERT INTO accounts (username, account_type)
-         VALUES ($1, 'competitor')
-         ON CONFLICT (username) DO UPDATE SET
-           updated_at = NOW(),
-           scraped = FALSE,
-           posts_scraped = FALSE
+  // Se valida ANTES de crear nada: sin token el scraping falla igual, pero en
+  // background — y el usuario se queda mirando una investigación que nunca
+  // avanza sin saber por qué.
+  const apifyToken = await resolveApifyToken(user.id);
+  if (!apifyToken) {
+    return NextResponse.json(
+      { error: "Cargá tu API key de Apify en Configuración antes de scrapear" },
+      { status: 400 }
+    );
+  }
+
+  let researchId: number;
+
+  try {
+    researchId = await withTransaction(async (client) => {
+      const research = await client.query<{ id: number }>(
+        `INSERT INTO researches (name, description, status, user_id, days_back)
+         VALUES ($1, $2, 'scraping', $3, $4)
          RETURNING id`,
-        [username]
+        [name.trim(), description?.trim() || null, user.id, daysBack]
       );
-      const accountId = accountResult.rows[0].id;
+      const id = research.rows[0].id;
 
-      // Linkear cuenta a investigación
+      // Un solo INSERT para todas las cuentas en vez de N round-trips.
+      // El upsert resetea los flags para que una cuenta ya conocida se
+      // re-scrapee en el contexto de esta investigación (LES-009).
+      const accounts = await client.query<{ id: number }>(
+        `INSERT INTO accounts (username, account_type)
+         SELECT u, 'competitor' FROM UNNEST($1::text[]) AS u
+         ON CONFLICT (username) DO UPDATE SET
+           updated_at          = NOW(),
+           scraped             = FALSE,
+           posts_scraped       = FALSE,
+           scrape_status       = 'pending',
+           posts_scrape_status = 'pending'
+         RETURNING id`,
+        [cleanUsernames]
+      );
+
       await client.query(
         `INSERT INTO research_accounts (research_id, account_id)
-         VALUES ($1, $2)
+         SELECT $1, a FROM UNNEST($2::int[]) AS a
          ON CONFLICT DO NOTHING`,
-        [researchId, accountId]
+        [id, accounts.rows.map((row) => row.id)]
       );
-    }
 
-    // 3. Obtener API key de Apify del usuario
-    const profileResult = await client.query(
-      `SELECT apify_api_key FROM user_profiles WHERE user_id = $1`,
-      [user.id]
-    );
-    const apifyApiKey = profileResult.rows[0]?.apify_api_key || null;
-
-    // 4. Disparar webhook de n8n (si está configurado)
-    const webhookUrl = process.env.N8N_RESEARCH_WEBHOOK_URL;
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            research_id: researchId,
-            name,
-            usernames,
-            days_back: daysBack,
-            apify_api_key: apifyApiKey,
-            user_id: user.id,
-          }),
-        });
-        // Actualizar estado a scraping
-        await client.query(
-          `UPDATE researches SET status = 'scraping' WHERE id = $1`,
-          [researchId]
-        );
-      } catch {
-        // Si el webhook falla, la investigación queda en draft
-        console.error("Failed to trigger n8n webhook");
-      }
-    }
-
-    await client.query("COMMIT");
-
-    return NextResponse.json(
-      { id: researchId, name, accounts_count: usernames.length },
-      { status: 201 }
-    );
+      return id;
+    });
   } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Error creating research:", error);
+    console.error("Error creando la investigación:", error);
     return NextResponse.json(
       { error: "Error creando la investigación" },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
+
+  // El scraping tarda minutos: se dispara DESPUES de responder. `after` es de
+  // Next: mantiene vivo el trabajo una vez enviada la respuesta, sin bloquearla.
+  // Antes esto era un fetch al webhook de n8n hecho DENTRO de la transacción,
+  // que dejaba una conexión de Postgres tomada durante toda la llamada HTTP.
+  //
+  // Si el proceso muere a mitad, las cuentas quedan reclamadas y vuelven solas a
+  // la cola pasados 15 min; se reintenta con `npm run scrape:profiles -- --research <id>`.
+  after(() => runResearchPipeline(researchId));
+
+  return NextResponse.json(
+    { id: researchId, name: name.trim(), accounts_count: cleanUsernames.length },
+    { status: 201 }
+  );
+}
+
+/** El token del usuario manda; APIFY_TOKEN del entorno es el fallback compartido. */
+async function resolveApifyToken(userId: string): Promise<string | null> {
+  const result = await pool.query<{ apify_api_key: string | null }>(
+    `SELECT apify_api_key FROM user_profiles WHERE user_id = $1`,
+    [userId]
+  );
+
+  return result.rows[0]?.apify_api_key || process.env.APIFY_TOKEN || null;
 }
