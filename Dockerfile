@@ -1,30 +1,41 @@
 FROM node:20-alpine AS base
 
-# Install dependencies
-FROM base AS deps
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --only=production 2>/dev/null || npm install --only=production
-
-# Build
+# ── Build ───────────────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
+
 COPY package.json package-lock.json* ./
-RUN npm ci 2>/dev/null || npm install
+RUN npm ci
+
 COPY . .
+
+# Las NEXT_PUBLIC_* se hornean en el bundle del cliente en tiempo de BUILD
+# (LES-012), asi que entran como build args y no como variables del servicio.
+#
+# Antes estaban hardcodeadas apuntando al Supabase viejo, con la anon key de
+# demo adentro del repo. Ahora se pasan desde afuera:
+#   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+#
+# NEXT_PUBLIC_SUPABASE_URL es opcional: en el navegador la app usa su propio
+# origen (ver app/lib/supabase/browser.ts), asi que la imagen no queda atada a
+# un dominio. Solo hace falta si algo la necesita durante el prerender.
+ARG NEXT_PUBLIC_SUPABASE_URL=""
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=""
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_SUPABASE_URL=https://rainmakers-supabase-rein.1bzpyo.easypanel.host
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+
 RUN npm run build
 
-# Production
+# ── Runtime ─────────────────────────────────────────────────
 FROM base AS runner
 WORKDIR /app
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
