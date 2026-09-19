@@ -20,7 +20,7 @@ import type { AddressInfo } from "node:net";
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const PERFIL_EJEMPLO = JSON.parse(
   readFileSync(
-    join(AQUI, "../../apify-documentation/instagram-scraper/scraped-instagram-profile-example.json"),
+    join(AQUI, "fixtures/perfil-instagram.json"),
     "utf8"
   )
 );

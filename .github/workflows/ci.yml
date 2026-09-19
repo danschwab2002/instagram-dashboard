@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un push nuevo sobre la misma rama cancela la corrida anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  estatico:
+    name: Typecheck y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  tests:
+    name: Tests de punta a punta
+    runs-on: ubuntu-latest
+
+    # El schema de la app cuelga de `auth.users`, que en produccion crea
+    # GoTrue. Los tests la levantan como stub, asi que alcanza un Postgres
+    # pelado de la misma version que produccion.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: devlocal
+          POSTGRES_DB: instagram_scraper
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:devlocal@localhost:5432/instagram_scraper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Aplicar el schema
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/00_auth_stub_dev.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/schema.sql
+          for m in db/migrations/*.sql; do
+            echo "-- $m"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$m"
+          done
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/functions.sql
+
+      # Los tres tests BORRAN el contenido de la base que les toca, por eso
+      # corren en serie sobre la misma instancia efimera.
+      - name: Recoleccion de perfiles
+        run: npm run test:scrape-profiles
+
+      - name: Recoleccion de contenido
+        run: npm run test:scrape-posts
+
+      - name: Pipeline completo
+        run: npm run test:pipeline

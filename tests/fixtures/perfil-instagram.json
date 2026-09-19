@@ -1,0 +1,16 @@
+{
+  "id": "17841400000000001",
+  "username": "cuenta_de_ejemplo",
+  "fullName": "Cuenta De Ejemplo",
+  "biography": "Perfil sintetico para los tests. No corresponde a ninguna cuenta real.",
+  "externalUrl": "https://example.com",
+  "followersCount": 48200,
+  "followsCount": 312,
+  "postsCount": 764,
+  "isBusinessAccount": true,
+  "businessCategoryName": "Education",
+  "verified": false,
+  "private": false,
+  "profilePicUrl": "https://cdn.example.com/perfil/ejemplo.jpg",
+  "profilePicUrlHD": "https://cdn.example.com/perfil/ejemplo_hd.jpg"
+}
