@@ -59,13 +59,7 @@ for _ in $(seq 1 60); do
 done
 
 echo "aplicando stub de auth.users..."
-psql_run <<'SQL'
-CREATE SCHEMA IF NOT EXISTS auth;
-CREATE TABLE IF NOT EXISTS auth.users (
-  id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE
-);
-SQL
+psql_run < "$DIR/db/00_auth_stub_dev.sql" >/dev/null
 
 echo "aplicando schema.sql..."
 psql_run < "$DIR/db/schema.sql" >/dev/null
